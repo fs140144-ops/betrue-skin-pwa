@@ -3,7 +3,7 @@
  * 初回アクセス時に全アセット（HTML/JS/WASM/モデル/アイコン）をキャッシュし、
  * 以降はネットワークなしで（Wi-Fi不要・Macとの接続不要で）完全に端末内動作する。
  */
-const CACHE_VERSION = "betrue-skin-pwa-v7";
+const CACHE_VERSION = "betrue-skin-pwa-v8";
 
 // 修正が入り得る「アプリ本体」ファイル。サイズが小さいため、
 // 通信があれば常に最新を優先し、オフライン時のみキャッシュへフォールバックする
@@ -21,6 +21,8 @@ const SHELL_ASSETS = [
   "./js/scoring.js",
   "./js/history.js",
   "./js/report.js",
+  "./js/landmarker-worker.js",
+  "./js/landmarker-client.js",
 ];
 
 // サイズが大きく（数MB〜10MB超）、めったに変わらない静的アセット。

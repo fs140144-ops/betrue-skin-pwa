@@ -3,7 +3,7 @@
  * カメラ撮影 → 顔検出(MediaPipe) → 部位切り出し・測定(OpenCV.js) → スコアリング → 履歴保存(IndexedDB)
  * → レポート表示、をすべて端末内（オフライン）で完結させる。Python版 analyze.run() の移植。
  */
-import { FaceLandmarker, FilesetResolver } from "../vendor/mediapipe/vision_bundle.mjs";
+import { LandmarkerClient } from "./landmarker-client.js";
 import * as regions from "./regions.js";
 import * as metrics from "./metrics.js";
 import * as scoring from "./scoring.js";
@@ -32,7 +32,10 @@ const els = {
   resetCacheBtn: document.getElementById("reset-cache-btn"),
 };
 
-let faceLandmarker = null;
+// 顔検出の初期化・実行はメインスレッドをフリーズさせないよう、
+// すべてWeb Worker（landmarker-worker.js）内で行う。詳細はlandmarker-client.js参照。
+const landmarkerClient = new LandmarkerClient();
+let landmarkerReady = false;
 let capturedPhotos = []; // { alignedCanvas, regions, framing, categoryRaw, issues }
 let mediaStream = null;
 
@@ -124,38 +127,11 @@ if (els.resetCacheBtn) {
   // 初期化が20秒経っても終わらない場合に備えて、逃げ道として早めに表示しておく
   // （タイムアウトの180秒を待たなくても、ユーザーが自分の判断でやり直せるように）。
   setTimeout(() => {
-    if (!faceLandmarker) els.resetCacheBtn.style.display = "";
+    if (!landmarkerReady) els.resetCacheBtn.style.display = "";
   }, 20000);
 }
 
 // ---------- 初期化（WASMランタイム・モデルのロード） ----------
-
-// GPU delegateはiOS Safari等で互換性が不安定で、環境によっては例外を投げずに
-// 初期化が長時間ハングすることが確認された（try/catchでは救えない）。
-// 撮影1枚あたり1回しか顔検出を実行しないため速度面のメリットは小さく、
-// 全端末で確実に動くことを優先してCPU delegateのみを使用する。
-//
-// パス解決について: MediaPipeのforVisionTasks/modelAssetPathに渡す文字列は
-// 「現在のドキュメントのURL」基準で解決される（jsモジュールのimport文のように
-// app.js自身の場所を基準にはしてくれない）。GitHub Pages等、pwa/がオリジン直下
-// ではなくサブディレクトリ（例: https://example.github.io/betrue-skin-pwa/）で
-// 配信される場合、"../vendor/..." のような相対文字列は誤ったパスに解決されて
-// しまう（一つ上のディレクトリに飛び出してしまう）。そのため必ずimport.meta.url
-// （app.js自身の実URL）を基準にした絶対URLへ変換してから渡す。
-const MODEL_URL = new URL("../models/face_landmarker.task", import.meta.url).href;
-const WASM_BASE_URL = new URL("../vendor/mediapipe/wasm", import.meta.url).href;
-
-function createLandmarker(fileset, delegate) {
-  return FaceLandmarker.createFromOptions(fileset, {
-    baseOptions: {
-      modelAssetPath: MODEL_URL,
-      delegate,
-    },
-    runningMode: "IMAGE",
-    numFaces: 1,
-    outputFacialTransformationMatrixes: true,
-  });
-}
 
 // 初回起動時はopencv.js(約10MB)＋WASM本体(約9MB)＋顔検出モデル(約4MB)の
 // 合計20数MBをダウンロード・コンパイルする必要があり、回線が遅い環境
@@ -189,19 +165,16 @@ async function boot() {
   await window.cvReady; // opencv.js のWASMランタイム初期化待ち
   logStep("✓ 画像処理エンジンの準備完了");
 
-  const fileset = await withElapsedStatus(
-    FilesetResolver.forVisionTasks(WASM_BASE_URL),
+  // 顔検出エンジン・モデルの初期化はWorker内で実行する。万一Worker内で
+  // 本当にフリーズしても、landmarkerClient側が180秒でworker.terminate()を
+  // 呼んで強制的に打ち切るため、この画面が固まったままになることはない。
+  await withElapsedStatus(
+    landmarkerClient.init(180000),
     "顔検出エンジンを読み込み中",
-    180000,
+    185000,
   );
+  landmarkerReady = true;
   logStep("✓ 顔検出エンジンの読み込み完了");
-
-  faceLandmarker = await withElapsedStatus(
-    createLandmarker(fileset, "CPU"),
-    "顔検出モデルを読み込み中",
-    180000,
-  );
-  logStep("✓ 顔検出モデルの読み込み完了");
 
   setStatus("準備完了。撮影してください。");
   setTimeout(clearStatus, 1500);
@@ -302,7 +275,7 @@ async function processCapturedCanvas(canvas) {
   els.captureStatus.textContent = "解析中…";
   els.captureBtn.disabled = true;
   try {
-    const detectResult = faceLandmarker.detect(canvas);
+    const detectResult = await landmarkerClient.detect(canvas, 30000);
     if (!detectResult.faceLandmarks || !detectResult.faceLandmarks.length) {
       els.captureStatus.textContent =
         "⚠ 顔を検出できませんでした。正面を向いた明るい写真で再撮影してください。";
