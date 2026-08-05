@@ -37,6 +37,30 @@ function setStatus(text) {
   if (els.statusBox) els.statusBox.textContent = text;
 }
 
+// 実機での「押しても何も起きない」を防ぐための保険。
+// コンソールにしか出ないはずの想定外のエラーも、画面上に見える形で必ず表示する。
+function showFatalError(prefix, err) {
+  const msg = (err && (err.message || err.toString())) || String(err);
+  console.error(prefix, err);
+  if (els.statusBox) {
+    els.statusBox.textContent = `⚠ ${prefix}: ${msg}`;
+    els.statusBox.style.color = "#ff6b6b";
+  }
+  if (els.resultSection) {
+    els.resultSection.innerHTML =
+      `<p class="error">⚠ ${prefix}: ${escapeHtml(msg)}<br><span class="small">` +
+      `画面を再読み込みしても直らない場合は、この画面のスクリーンショットを共有してください。</span></p>` +
+      els.resultSection.innerHTML;
+  }
+}
+
+window.addEventListener("error", (event) => {
+  showFatalError("予期しないエラーが発生しました", event.error || event.message);
+});
+window.addEventListener("unhandledrejection", (event) => {
+  showFatalError("予期しないエラーが発生しました", event.reason);
+});
+
 // ---------- 初期化（WASMランタイム・モデルのロード） ----------
 
 // GPU delegateはiOS Safari等で互換性が不安定で、環境によっては例外を投げずに
@@ -238,6 +262,7 @@ async function onAnalyzeClick() {
 
   els.analyzeBtn.disabled = true;
   els.resultSection.innerHTML = `<p class="analyzing">解析中…しばらくお待ちください。</p>`;
+  els.resultSection.scrollIntoView({ behavior: "smooth" });
 
   try {
     const categoryRaw = averageCategoryRaw(capturedPhotos.map((p) => p.categoryRaw));
@@ -334,4 +359,4 @@ if ("serviceWorker" in navigator) {
   });
 }
 
-boot();
+boot().catch((e) => showFatalError("初期化に失敗しました", e));
