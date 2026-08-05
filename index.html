@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Be:true 肌測定</title>
+<meta name="theme-color" content="#c2185b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="肌測定">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px 14px 60px;
+    background: #111; color: #eee;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    line-height: 1.6;
+  }
+  h1 { font-size: 1.25rem; margin: 4px 0 14px; }
+  h2 { font-size: 1.05rem; margin: 22px 0 8px; color: #ffd1e3; }
+  .card {
+    background: #1c1c1c; border-radius: 12px; padding: 14px; margin-bottom: 14px;
+    border: 1px solid #2c2c2c;
+  }
+  label { display: block; font-size: 0.85rem; color: #bbb; margin-bottom: 6px; }
+  input[type="text"] {
+    width: 100%; padding: 10px; font-size: 1rem; border-radius: 8px;
+    border: 1px solid #444; background: #222; color: #fff;
+  }
+  #boot-status {
+    font-size: 0.82rem; color: #ffcf5c; min-height: 1.2em; margin-bottom: 10px;
+  }
+  .checklist { list-style: none; padding: 0; margin: 0; font-size: 0.86rem; color: #ddd; }
+  .checklist li { padding: 4px 0; }
+  .checklist li::before { content: "✔ "; color: #6fcf6f; }
+
+  .camera-wrap { position: relative; width: 100%; aspect-ratio: 3/4; background: #000; border-radius: 10px; overflow: hidden; }
+  #camera-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .guide-overlay {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    flex-direction: column; pointer-events: none;
+  }
+  .guide-oval {
+    width: 62%; height: 78%; border: 3px dashed rgba(255,255,255,0.85); border-radius: 50% / 42%;
+    box-shadow: 0 0 0 1000px rgba(0,0,0,0.35);
+  }
+  .guide-text {
+    position: absolute; bottom: 14px; left: 0; right: 0; text-align: center;
+    color: #fff; font-size: 0.85rem; text-shadow: 0 1px 3px rgba(0,0,0,0.8); padding: 0 10px;
+  }
+  #capture-btn, #reset-btn, #analyze-btn {
+    width: 100%; padding: 13px; font-size: 1rem; border-radius: 10px; border: none;
+    margin-top: 10px; font-weight: 600; cursor: pointer;
+  }
+  #capture-btn { background: #c2185b; color: #fff; }
+  #capture-btn:disabled { background: #555; color: #999; }
+  #reset-btn { background: #333; color: #ddd; }
+  #analyze-btn { background: #2fa62f; color: #fff; }
+  #analyze-btn:disabled { background: #555; color: #999; }
+  .capture-status { font-size: 0.85rem; color: #ffcf5c; min-height: 1.3em; margin-top: 8px; }
+  .thumbs { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .thumb { width: 64px; height: 64px; border-radius: 8px; overflow: hidden; border: 2px solid #2fa62f; }
+  .thumb.thumb-warn { border-color: #d99a00; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; }
+  #fallback-note { font-size: 0.82rem; color: #bbb; margin-bottom: 8px; }
+  #fallback-input { width: 100%; color: #ddd; }
+
+  .analyzing { color: #ffcf5c; }
+  .error { color: #ff6b6b; }
+
+  /* --- レポート表示 --- */
+  .report { background: #fff; color: #222; border-radius: 10px; padding: 18px; margin-top: 10px; }
+  .report h1 { color: #222; font-size: 1.3rem; }
+  .report h2 { color: #222; font-size: 1.05rem; border-bottom: 2px solid #eee; padding-bottom: 4px; }
+  .report .sub { color: #666; font-size: 0.82rem; }
+  .report .warn { color: #a65f00; font-size: 0.88rem; }
+  .report .small { color: #888; font-size: 0.76rem; }
+  .report .indent { margin-left: 12px; }
+  .report .diagnosis-img { width: 100%; border-radius: 8px; margin: 6px 0 14px; }
+  .report table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-bottom: 8px; }
+  .report th, .report td { border: 1px solid #ddd; padding: 6px 6px; text-align: left; vertical-align: top; }
+  .report th { background: #333; color: #fff; }
+  .report .score-table tr:nth-child(even) td { background: #f6f6f6; }
+  .report .reco-table th { background: #8a5a2b; }
+  .report .reco-table tr:nth-child(even) td { background: #f8f2ea; }
+  .report-actions { display: flex; gap: 8px; margin-top: 14px; }
+  .report-actions button {
+    flex: 1; padding: 12px; border-radius: 10px; border: none; font-weight: 600; cursor: pointer;
+  }
+  #print-btn { background: #0090a6; color: #fff; }
+  #back-btn { background: #333; color: #ddd; }
+
+  @media print {
+    body * { visibility: hidden; }
+    .report, .report * { visibility: visible; }
+    .report { position: absolute; top: 0; left: 0; width: 100%; }
+    .report-actions { display: none; }
+  }
+</style>
+</head>
+<body>
+  <h1>🌸 Be:true 肌測定</h1>
+  <div id="boot-status">読み込み中…</div>
+
+  <div class="card">
+    <label for="customer_id">顧客ID</label>
+    <input type="text" id="customer_id" placeholder="例：tanaka001" autocomplete="off">
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0;">📋 撮影ガイド</h2>
+    <ul class="checklist">
+      <li>明るい場所で撮影してください</li>
+      <li>正面を向いて、カメラと同じ高さで撮影してください</li>
+      <li>前髪を上げ、メガネ・マスクは外してください</li>
+      <li>無表情で、枠に顔を合わせてください</li>
+      <li>できれば3枚撮影してください（誤差を減らせます）</li>
+    </ul>
+  </div>
+
+  <div class="card" id="camera-section" style="display:none;">
+    <div class="camera-wrap">
+      <video id="camera-video" autoplay playsinline muted></video>
+      <div class="guide-overlay">
+        <div class="guide-oval"></div>
+        <div class="guide-text">顔をこの枠に合わせてください</div>
+      </div>
+    </div>
+    <button id="capture-btn" type="button">📸 撮影する</button>
+    <button id="reset-btn" type="button">🔄 撮り直す</button>
+  </div>
+
+  <div class="card" id="fallback-section" style="display:none;">
+    <p id="fallback-note">カメラが使用できないため、写真を選択してください（最大3枚）。</p>
+    <input type="file" id="fallback-input" accept="image/*" capture="environment" multiple>
+  </div>
+
+  <div class="card">
+    <div id="capture-status" class="capture-status"></div>
+    <div id="thumbs" class="thumbs"></div>
+  </div>
+
+  <button id="analyze-btn" type="button">🔬 解析する</button>
+
+  <div id="result-section"></div>
+
+  <canvas id="work-canvas" style="display:none;"></canvas>
+
+  <script>
+    // opencv.js はUMDスクリプトのため、type=moduleのapp.jsから確実に待ち合わせできるよう
+    // グローバルPromiseを先に用意しておく。
+    window.cvReady = new Promise((resolve) => {
+      window.onOpenCvReady = function () {
+        if (window.cv && cv.getBuildInformation) {
+          resolve();
+        } else {
+          cv["onRuntimeInitialized"] = resolve;
+        }
+      };
+    });
+  </script>
+  <script async src="vendor/opencv.js" onload="onOpenCvReady()"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
