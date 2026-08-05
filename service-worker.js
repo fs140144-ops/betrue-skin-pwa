@@ -3,7 +3,7 @@
  * 初回アクセス時に全アセット（HTML/JS/WASM/モデル/アイコン）をキャッシュし、
  * 以降はネットワークなしで（Wi-Fi不要・Macとの接続不要で）完全に端末内動作する。
  */
-const CACHE_VERSION = "betrue-skin-pwa-v4";
+const CACHE_VERSION = "betrue-skin-pwa-v5";
 
 const ASSETS = [
   "./",
@@ -26,9 +26,28 @@ const ASSETS = [
   "./icons/icon-512.png",
 ];
 
+// cache.addAll()は「1つでも取得に失敗したら全滅」という全か無かの挙動のため、
+// モバイル回線で大きなWASM/モデルファイル(数MB〜10MB超)を含む多数のアセットを
+// 一括取得しようとすると、途中で1つでもタイムアウト・失敗した場合に
+// Service Worker全体のインストールが失敗し、skipWaiting()も呼ばれず、
+// 古い（バグ入りの）Service Workerがいつまでも有効なままになってしまう。
+// これを避けるため、各アセットは個別にfetch→cache.putし、失敗しても
+// 他のアセットの取得とインストール自体はブロックしないようにする
+// （取得できなかったアセットはfetchハンドラ側で初回アクセス時に再取得を試みる）。
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_VERSION).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()),
+    caches.open(CACHE_VERSION).then((cache) =>
+      Promise.allSettled(
+        ASSETS.map((url) =>
+          fetch(url)
+            .then((response) => {
+              if (response && response.ok) return cache.put(url, response);
+              return null;
+            })
+            .catch(() => null),
+        ),
+      )
+    ).then(() => self.skipWaiting()),
   );
 });
 

@@ -92,13 +92,47 @@ function createLandmarker(fileset, delegate) {
   });
 }
 
-async function boot() {
-  setStatus("初期化中…（初回のみ数十秒かかる場合があります）");
-  await window.cvReady; // opencv.js のWASMランタイム初期化待ち
-  setStatus("顔検出モデルを読み込み中…");
+// 初回起動時はopencv.js(約10MB)＋WASM本体(約9MB)＋顔検出モデル(約4MB)の
+// 合計20数MBをダウンロード・コンパイルする必要があり、回線が遅い環境
+// （特にモバイル回線）では数十秒〜数分かかることがある。
+// 進捗が全く動かないと「フリーズした」ように見えてしまうため、
+// ①経過秒数を画面に表示し続ける、②あまりに長くかかる場合はタイムアウトして
+// 「回線を確認してください」という具体的な案内を出す、という二段構えにする。
+function withElapsedStatus(promise, label, timeoutMs) {
+  const startedAt = Date.now();
+  const tick = setInterval(() => {
+    const sec = Math.floor((Date.now() - startedAt) / 1000);
+    setStatus(`${label}…（${sec}秒経過。初回は時間がかかります）`);
+  }, 1000);
 
-  const fileset = await FilesetResolver.forVisionTasks(WASM_BASE_URL);
-  faceLandmarker = await createLandmarker(fileset, "CPU");
+  const timeout = new Promise((_, reject) => {
+    setTimeout(() => {
+      reject(
+        new Error(
+          `${label}がタイムアウトしました。通信環境（できればWi-Fi）を確認のうえ、` +
+            `画面を再読み込みしてもう一度お試しください。何度も失敗する場合は電波の良い場所でお試しください。`,
+        ),
+      );
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => clearInterval(tick));
+}
+
+async function boot() {
+  setStatus("初期化中…（初回のみ数十秒〜数分かかる場合があります）");
+  await window.cvReady; // opencv.js のWASMランタイム初期化待ち
+
+  const fileset = await withElapsedStatus(
+    FilesetResolver.forVisionTasks(WASM_BASE_URL),
+    "顔検出エンジンを読み込み中",
+    90000,
+  );
+  faceLandmarker = await withElapsedStatus(
+    createLandmarker(fileset, "CPU"),
+    "顔検出モデルを読み込み中",
+    90000,
+  );
 
   setStatus("準備完了。撮影してください。");
   setTimeout(() => setStatus(""), 1500);
