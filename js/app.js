@@ -162,7 +162,10 @@ function withElapsedStatus(promise, label, timeoutMs) {
 
 async function boot() {
   logStep("初期化中…（初回のみ数十秒〜数分かかる場合があります）");
-  await window.cvReady; // opencv.js のWASMランタイム初期化待ち
+  // opencv.js のWASMランタイム初期化待ち。onerror/タイムアウトいずれの場合も
+  // withElapsedStatusが例外を投げ、下のboot().catch(...)でエラー表示される
+  // ため、ここが理由不明なまま無限に固まることはない。
+  await withElapsedStatus(window.cvReady, "画像処理エンジンを読み込み中", 90000);
   logStep("✓ 画像処理エンジンの準備完了");
 
   // 顔検出エンジン・モデルの初期化はWorker内で実行する。万一Worker内で

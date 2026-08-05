@@ -163,7 +163,11 @@
   <script>
     // opencv.js はUMDスクリプトのため、type=moduleのapp.jsから確実に待ち合わせできるよう
     // グローバルPromiseを先に用意しておく。
-    window.cvReady = new Promise((resolve) => {
+    // onerrorも必ず拾う: これが無いと、opencv.js自体の取得に失敗した場合（回線断・
+    // 404・拡張機能によるブロック等）にonload/onOpenCvReadyが一生呼ばれず、
+    // window.cvReadyが永遠にpending状態のまま = app.js側のboot()が無期限に
+    // フリーズしてしまう（タイムアウトすら発火しようがない）。
+    window.cvReady = new Promise((resolve, reject) => {
       window.onOpenCvReady = function () {
         if (window.cv && cv.getBuildInformation) {
           resolve();
@@ -171,9 +175,12 @@
           cv["onRuntimeInitialized"] = resolve;
         }
       };
+      window.onOpenCvError = function () {
+        reject(new Error("画像処理エンジン(opencv.js)の読み込みに失敗しました。通信環境を確認してください。"));
+      };
     });
   </script>
-  <script async src="vendor/opencv.js" onload="onOpenCvReady()"></script>
+  <script async src="vendor/opencv.js" onload="onOpenCvReady()" onerror="onOpenCvError()"></script>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>
