@@ -24,6 +24,8 @@ const els = {
   captureStatus: document.getElementById("capture-status"),
   thumbs: document.getElementById("thumbs"),
   fallbackInput: document.getElementById("fallback-input"),
+  fallbackNote: document.getElementById("fallback-note"),
+  retryCameraBtn: document.getElementById("retry-camera-btn"),
   analyzeBtn: document.getElementById("analyze-btn"),
   resultSection: document.getElementById("result-section"),
   workCanvas: document.getElementById("work-canvas"),
@@ -97,7 +99,7 @@ async function boot() {
 
 async function initCamera() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    showFallback();
+    showFallback("このブラウザはカメラ撮影に対応していません。");
     return;
   }
   try {
@@ -109,13 +111,31 @@ async function initCamera() {
     els.cameraSection.style.display = "";
     els.fallbackSection.style.display = "none";
   } catch (e) {
-    showFallback();
+    console.warn("getUserMedia failed:", e);
+    showFallback(cameraErrorMessage(e));
   }
 }
 
-function showFallback() {
+function cameraErrorMessage(e) {
+  const name = e && e.name;
+  if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+    return "カメラの使用が許可されていません。ブラウザ／端末の設定でこのアプリのカメラ許可をオンにしてから「カメラをもう一度試す」を押してください。";
+  }
+  if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+    return "カメラが見つかりませんでした。下のボタンから写真を撮影／選択してください。";
+  }
+  if (name === "NotReadableError" || name === "TrackStartError") {
+    return "カメラが他のアプリで使用中の可能性があります。他のカメラアプリを閉じてから「カメラをもう一度試す」を押してください。";
+  }
+  return `カメラを起動できませんでした（${name || e}）。下のボタンから写真を撮影／選択してください。`;
+}
+
+function showFallback(reason) {
   els.cameraSection.style.display = "none";
   els.fallbackSection.style.display = "";
+  if (reason && els.fallbackNote) {
+    els.fallbackNote.textContent = reason;
+  }
 }
 
 function wireUi() {
@@ -123,6 +143,9 @@ function wireUi() {
   els.resetBtn.addEventListener("click", onReset);
   els.fallbackInput.addEventListener("change", onFallbackFileChange);
   els.analyzeBtn.addEventListener("click", onAnalyzeClick);
+  if (els.retryCameraBtn) {
+    els.retryCameraBtn.addEventListener("click", () => initCamera());
+  }
 }
 
 async function onCaptureClick() {
