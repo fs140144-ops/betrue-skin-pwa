@@ -69,10 +69,21 @@ window.addEventListener("unhandledrejection", (event) => {
 // 初期化が長時間ハングすることが確認された（try/catchでは救えない）。
 // 撮影1枚あたり1回しか顔検出を実行しないため速度面のメリットは小さく、
 // 全端末で確実に動くことを優先してCPU delegateのみを使用する。
+//
+// パス解決について: MediaPipeのforVisionTasks/modelAssetPathに渡す文字列は
+// 「現在のドキュメントのURL」基準で解決される（jsモジュールのimport文のように
+// app.js自身の場所を基準にはしてくれない）。GitHub Pages等、pwa/がオリジン直下
+// ではなくサブディレクトリ（例: https://example.github.io/betrue-skin-pwa/）で
+// 配信される場合、"../vendor/..." のような相対文字列は誤ったパスに解決されて
+// しまう（一つ上のディレクトリに飛び出してしまう）。そのため必ずimport.meta.url
+// （app.js自身の実URL）を基準にした絶対URLへ変換してから渡す。
+const MODEL_URL = new URL("../models/face_landmarker.task", import.meta.url).href;
+const WASM_BASE_URL = new URL("../vendor/mediapipe/wasm", import.meta.url).href;
+
 function createLandmarker(fileset, delegate) {
   return FaceLandmarker.createFromOptions(fileset, {
     baseOptions: {
-      modelAssetPath: "../models/face_landmarker.task",
+      modelAssetPath: MODEL_URL,
       delegate,
     },
     runningMode: "IMAGE",
@@ -86,7 +97,7 @@ async function boot() {
   await window.cvReady; // opencv.js のWASMランタイム初期化待ち
   setStatus("顔検出モデルを読み込み中…");
 
-  const fileset = await FilesetResolver.forVisionTasks("../vendor/mediapipe/wasm");
+  const fileset = await FilesetResolver.forVisionTasks(WASM_BASE_URL);
   faceLandmarker = await createLandmarker(fileset, "CPU");
 
   setStatus("準備完了。撮影してください。");
