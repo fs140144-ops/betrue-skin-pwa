@@ -29,24 +29,55 @@ const els = {
   analyzeBtn: document.getElementById("analyze-btn"),
   resultSection: document.getElementById("result-section"),
   workCanvas: document.getElementById("work-canvas"),
+  resetCacheBtn: document.getElementById("reset-cache-btn"),
 };
 
 let faceLandmarker = null;
 let capturedPhotos = []; // { alignedCanvas, regions, framing, categoryRaw, issues }
 let mediaStream = null;
 
+// 初期化の各段階を「上書き」ではなく「行を積み上げて」表示する。
+// もし途中でフリーズしても、その時点のスクリーンショット1枚だけで
+// どの段階まで進んでから止まったのかが分かるようにするため
+// （サポート時の原因切り分けを速くする目的）。
+function logStep(text) {
+  console.log("[boot]", text);
+  if (!els.statusBox) return;
+  const line = document.createElement("div");
+  line.textContent = text;
+  els.statusBox.appendChild(line);
+}
+
+// 進捗カウンタなど、頻繁に更新される行はチェックポイント行を積み上げず
+// 直近の1行だけを書き換える（末尾がlive行でなければ新規に作る）。
 function setStatus(text) {
-  if (els.statusBox) els.statusBox.textContent = text;
+  if (!els.statusBox) return;
+  let last = els.statusBox.lastElementChild;
+  if (!last || last.dataset.live !== "1") {
+    last = document.createElement("div");
+    last.dataset.live = "1";
+    els.statusBox.appendChild(last);
+  }
+  last.textContent = text;
+}
+
+function clearStatus() {
+  if (els.statusBox) els.statusBox.innerHTML = "";
 }
 
 // 実機での「押しても何も起きない」を防ぐための保険。
 // コンソールにしか出ないはずの想定外のエラーも、画面上に見える形で必ず表示する。
+// これまでの進捗ログ（logStep/setStatusで積み上げた行）は消さずに残す
+// ＝どこまで進んでから失敗したのかが、エラー画面からもそのまま分かる。
 function showFatalError(prefix, err) {
   const msg = (err && (err.message || err.toString())) || String(err);
   console.error(prefix, err);
   if (els.statusBox) {
-    els.statusBox.textContent = `⚠ ${prefix}: ${msg}`;
-    els.statusBox.style.color = "#ff6b6b";
+    const line = document.createElement("div");
+    line.style.color = "#ff6b6b";
+    line.style.fontWeight = "bold";
+    line.textContent = `⚠ ${prefix}: ${msg}`;
+    els.statusBox.appendChild(line);
   }
   if (els.resultSection) {
     els.resultSection.innerHTML =
@@ -62,6 +93,40 @@ window.addEventListener("error", (event) => {
 window.addEventListener("unhandledrejection", (event) => {
   showFatalError("予期しないエラーが発生しました", event.reason);
 });
+
+// 端末に「壊れた／中途半端な」状態でキャッシュされたファイルが残っていると、
+// コード側をいくら修正しても初期化が終わらないことがある。
+// その場合の最終手段として、Service Workerの登録解除＋全キャッシュ削除＋
+// 再読み込みを1ボタンでできるようにしておく。
+async function hardResetCache() {
+  try {
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+  } catch (e) {
+    console.warn("hardResetCache failed:", e);
+  } finally {
+    location.reload();
+  }
+}
+
+if (els.resetCacheBtn) {
+  els.resetCacheBtn.addEventListener("click", () => {
+    els.resetCacheBtn.textContent = "リセット中…";
+    els.resetCacheBtn.disabled = true;
+    hardResetCache();
+  });
+  // 初期化が20秒経っても終わらない場合に備えて、逃げ道として早めに表示しておく
+  // （タイムアウトの180秒を待たなくても、ユーザーが自分の判断でやり直せるように）。
+  setTimeout(() => {
+    if (!faceLandmarker) els.resetCacheBtn.style.display = "";
+  }, 20000);
+}
 
 // ---------- 初期化（WASMランタイム・モデルのロード） ----------
 
@@ -120,22 +185,26 @@ function withElapsedStatus(promise, label, timeoutMs) {
 }
 
 async function boot() {
-  setStatus("初期化中…（初回のみ数十秒〜数分かかる場合があります）");
+  logStep("初期化中…（初回のみ数十秒〜数分かかる場合があります）");
   await window.cvReady; // opencv.js のWASMランタイム初期化待ち
+  logStep("✓ 画像処理エンジンの準備完了");
 
   const fileset = await withElapsedStatus(
     FilesetResolver.forVisionTasks(WASM_BASE_URL),
     "顔検出エンジンを読み込み中",
-    90000,
+    180000,
   );
+  logStep("✓ 顔検出エンジンの読み込み完了");
+
   faceLandmarker = await withElapsedStatus(
     createLandmarker(fileset, "CPU"),
     "顔検出モデルを読み込み中",
-    90000,
+    180000,
   );
+  logStep("✓ 顔検出モデルの読み込み完了");
 
   setStatus("準備完了。撮影してください。");
-  setTimeout(() => setStatus(""), 1500);
+  setTimeout(clearStatus, 1500);
   initCamera();
   wireUi();
 }
