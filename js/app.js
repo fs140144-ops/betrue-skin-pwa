@@ -419,6 +419,18 @@ function renderResult(html) {
 // ---------- Service Worker登録（オフライン対応） ----------
 
 if ("serviceWorker" in navigator) {
+  // 新しいService Workerが有効化されて「操作の主体」が切り替わったら、
+  // 自動的に1回だけページを再読み込みする。これが無いと、修正版を
+  // デプロイしても古いService Workerが既に開いているタブを制御し続け、
+  // ユーザーが手動でアプリを閉じて開き直すまで新しいコードが反映されない
+  // （＝修正したはずのバグが直って見えない）という問題が起きる。
+  let swRefreshing = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (swRefreshing) return;
+    swRefreshing = true;
+    window.location.reload();
+  });
+
   window.addEventListener("load", () => {
     const swUrl = new URL("../service-worker.js", import.meta.url);
     navigator.serviceWorker.register(swUrl, { scope: "../" }).catch((e) => {

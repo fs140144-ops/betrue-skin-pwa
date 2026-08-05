@@ -3,9 +3,15 @@
  * 初回アクセス時に全アセット（HTML/JS/WASM/モデル/アイコン）をキャッシュし、
  * 以降はネットワークなしで（Wi-Fi不要・Macとの接続不要で）完全に端末内動作する。
  */
-const CACHE_VERSION = "betrue-skin-pwa-v5";
+const CACHE_VERSION = "betrue-skin-pwa-v6";
 
-const ASSETS = [
+// 修正が入り得る「アプリ本体」ファイル。サイズが小さいため、
+// 通信があれば常に最新を優先し、オフライン時のみキャッシュへフォールバックする
+// （network-first）。これまではここもcache-first（＝一度キャッシュされたら
+// ネットワークに新しい版があっても古いままそれを使い続ける）だったため、
+// アプリ側のバグを直してデプロイしても、端末側でキャッシュが更新されるまで
+// 修正が反映されない、という問題が起きていた。
+const SHELL_ASSETS = [
   "./",
   "./index.html",
   "./manifest.json",
@@ -15,6 +21,11 @@ const ASSETS = [
   "./js/scoring.js",
   "./js/history.js",
   "./js/report.js",
+];
+
+// サイズが大きく（数MB〜10MB超）、めったに変わらない静的アセット。
+// 一度取得できればキャッシュを優先し、通信量・待ち時間を減らす（cache-first）。
+const STATIC_ASSETS = [
   "./vendor/opencv.js",
   "./vendor/mediapipe/vision_bundle.mjs",
   "./vendor/mediapipe/wasm/vision_wasm_internal.js",
@@ -25,6 +36,8 @@ const ASSETS = [
   "./icons/icon-192.png",
   "./icons/icon-512.png",
 ];
+
+const ASSETS = [...SHELL_ASSETS, ...STATIC_ASSETS];
 
 // cache.addAll()は「1つでも取得に失敗したら全滅」という全か無かの挙動のため、
 // モバイル回線で大きなWASM/モデルファイル(数MB〜10MB超)を含む多数のアセットを
@@ -39,7 +52,7 @@ self.addEventListener("install", (event) => {
     caches.open(CACHE_VERSION).then((cache) =>
       Promise.allSettled(
         ASSETS.map((url) =>
-          fetch(url)
+          fetch(url, { cache: "no-store" })
             .then((response) => {
               if (response && response.ok) return cache.put(url, response);
               return null;
@@ -59,10 +72,36 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Cache-first: 一度キャッシュされたアセットはネットワークなしで即座に返す。
-// キャッシュに無いものだけネットワーク取得を試み、取れればキャッシュに追加する。
+function isShellRequest(request, url) {
+  if (request.mode === "navigate") return true; // index.html本体
+  if (url.pathname.endsWith("/manifest.json")) return true;
+  if (url.pathname.includes("/js/")) return true;
+  return false;
+}
+
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+
+  if (isShellRequest(event.request, url)) {
+    // network-first: 常に最新のアプリ本体を優先して取得する。
+    // HTTPキャッシュも経由しないよう cache: "no-store" を指定し、
+    // オフライン等でネットワーク取得に失敗した場合のみキャッシュへ逃がす。
+    event.respondWith(
+      fetch(event.request, { cache: "no-store" })
+        .then((response) => {
+          if (response && response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_VERSION).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request)),
+    );
+    return;
+  }
+
+  // cache-first: 大きな静的アセット（WASM/モデル/opencv等）は一度取得すれば使い回す。
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
