@@ -1,6 +1,6 @@
 /**
  * MediaPipe FaceLandmarkerの初期化・顔検出処理を、メインスレッドから
- * 完全に切り離して実行するためのモジュールWorker。
+ * 完全に切り離して実行するためのWorker。
  *
  * なぜWorkerに分離するのか:
  * メインスレッド上のsetTimeoutによる「ソフトタイムアウト」は、WASMの初期化や
@@ -11,18 +11,29 @@
  * （無限ループでも、長時間の同期WASM呼び出しでも）メインスレッド側から
  * worker.terminate()で強制的に打ち切ることができる。これが実機での
  * 「顔検出モデルを読み込み中のまま一生固まる」を構造的になくす唯一の方法。
+ *
+ * 重要: あえて「クラシックWorker」として生成すること（type: "module"にしない）。
+ * vision_bundle.mjs内部には、WASMグルーコードを追加ロードする際に
+ * `typeof importScripts === "function"` であればWorker環境とみなして
+ * `importScripts(...)` を呼び出す実装が含まれている。ところが
+ * importScripts()は仕様上「モジュールWorker」では使用できず、呼び出した瞬間に
+ * 例外（Module scripts don't support importScripts()）で落ちてしまう
+ * （実機検証で実際にこのエラーが発生することを確認済み）。
+ * クラシックWorkerであればimportScripts()は正常に使えるため、
+ * vision_bundle.mjs（ESモジュール）自体は静的importではなく動的import()で読み込む
+ * （動的import()はクラシックスクリプト・クラシックWorkerからでも仕様上使用可能）。
+ * パス解決も、モジュールでないため import.meta.url が使えず、代わりに
+ * self.location.href（Workerスクリプト自身の絶対URL）を基準にする。
  */
-import { FaceLandmarker, FilesetResolver } from "../vendor/mediapipe/vision_bundle.mjs";
-
-// パス解決について: import.meta.url はこのworkerスクリプト自身のURLを指すため、
-// メインスレッドのapp.jsと同じ「絶対URLへ変換してから渡す」パターンがそのまま使える
-// （GitHub Pagesのサブディレクトリ配信でも正しく解決される）。
-const MODEL_URL = new URL("../models/face_landmarker.task", import.meta.url).href;
-const WASM_BASE_URL = new URL("../vendor/mediapipe/wasm", import.meta.url).href;
+const SELF_URL = self.location.href;
+const MODEL_URL = new URL("../models/face_landmarker.task", SELF_URL).href;
+const WASM_BASE_URL = new URL("../vendor/mediapipe/wasm", SELF_URL).href;
+const VISION_BUNDLE_URL = new URL("../vendor/mediapipe/vision_bundle.mjs", SELF_URL).href;
 
 let faceLandmarker = null;
 
 async function init() {
+  const { FaceLandmarker, FilesetResolver } = await import(VISION_BUNDLE_URL);
   const fileset = await FilesetResolver.forVisionTasks(WASM_BASE_URL);
   faceLandmarker = await FaceLandmarker.createFromOptions(fileset, {
     baseOptions: {

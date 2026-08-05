@@ -15,7 +15,10 @@ export class LandmarkerClient {
 
   _createWorker() {
     const workerUrl = new URL("./landmarker-worker.js", import.meta.url);
-    const worker = new Worker(workerUrl, { type: "module" });
+    // あえてクラシックWorkerとして生成する（type: "module"を指定しない）。
+    // 理由はlandmarker-worker.js冒頭のコメント参照
+    // （MediaPipe内部がimportScripts()を使うため、モジュールWorkerだと例外になる）。
+    const worker = new Worker(workerUrl);
     worker.onmessage = (event) => {
       const { id, type, result, message } = event.data || {};
       const entry = this.pending.get(id);
