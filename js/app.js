@@ -20,6 +20,8 @@ const SYNC_ENDPOINT = "https://betrue-booking-form.onrender.com/api/diagnosis/sy
 const els = {
   statusBox: document.getElementById("boot-status"),
   customerId: document.getElementById("customer_id"),
+  treatmentSelect: document.getElementById("treatment_select"),
+  treatmentOther: document.getElementById("treatment_other"),
   cameraSection: document.getElementById("camera-section"),
   fallbackSection: document.getElementById("fallback-section"),
   video: document.getElementById("camera-video"),
@@ -41,6 +43,34 @@ const els = {
 // setLang()経由の切替時もi18n.js側がapplyDom()を呼ぶため、ここでは初回のみでよい。
 i18n.applyDom();
 i18n.renderLanguageSwitcher(els.langSwitcher);
+
+// 「本日の施術」<select>の選択肢を現在言語で描画する。値（key）は言語に関わらず
+// 固定（wodorowe等）なので、選択状態を保ったまま言語切替時に再描画できる。
+function renderTreatmentOptions() {
+  if (!els.treatmentSelect) return;
+  const prevValue = els.treatmentSelect.value;
+  els.treatmentSelect.innerHTML = "";
+  const placeholderOpt = document.createElement("option");
+  placeholderOpt.value = "";
+  placeholderOpt.textContent = i18n.t("ui.treatmentPlaceholder");
+  els.treatmentSelect.appendChild(placeholderOpt);
+  for (const { key, label } of i18n.treatmentOptions()) {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = label;
+    els.treatmentSelect.appendChild(opt);
+  }
+  if (prevValue) els.treatmentSelect.value = prevValue;
+}
+renderTreatmentOptions();
+i18n.onLangChange(renderTreatmentOptions);
+
+// 「その他」選択時のみ自由入力欄を表示する。
+if (els.treatmentSelect && els.treatmentOther) {
+  els.treatmentSelect.addEventListener("change", () => {
+    els.treatmentOther.style.display = els.treatmentSelect.value === "other" ? "" : "none";
+  });
+}
 
 // 顔検出の初期化・実行はメインスレッドをフリーズさせないよう、
 // すべてWeb Worker（landmarker-worker.js）内で行う。詳細はlandmarker-client.js参照。
@@ -376,6 +406,16 @@ async function onAnalyzeClick() {
     alert(i18n.t("ui.alertNeedCustomerId"));
     return;
   }
+  // treatment = 本日の施術。「その他」選択時は自由入力欄の値をそのまま保存する
+  // （キー固定の選択肢と違い翻訳は行わない＝スタッフが入力した言語のまま）。
+  const treatmentKey = els.treatmentSelect ? els.treatmentSelect.value : "";
+  const treatment = treatmentKey === "other"
+    ? (els.treatmentOther ? els.treatmentOther.value.trim() : "")
+    : treatmentKey;
+  if (!treatment) {
+    alert(i18n.t("ui.alertNeedTreatment"));
+    return;
+  }
   if (!capturedPhotos.length) {
     alert(i18n.t("ui.alertNeedPhoto"));
     return;
@@ -438,6 +478,7 @@ async function onAnalyzeClick() {
       scores: scoresByCategory,
       overall,
       photo_count: capturedPhotos.length,
+      treatment,
     });
 
     // ダッシュボード同期はベストエフォート・fire-and-forget（awaitしない）。
@@ -447,6 +488,7 @@ async function onAnalyzeClick() {
       timestamp: recordTimestamp,
       overall,
       scores: scoresByCategory,
+      treatment,
     });
 
     const firstPhoto = capturedPhotos[0];

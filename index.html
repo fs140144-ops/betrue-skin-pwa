@@ -27,7 +27,7 @@
     border: 1px solid #2c2c2c;
   }
   label { display: block; font-size: 0.85rem; color: #bbb; margin-bottom: 6px; }
-  input[type="text"] {
+  input[type="text"], input[type="tel"], select {
     width: 100%; padding: 10px; font-size: 1rem; border-radius: 8px;
     border: 1px solid #444; background: #222; color: #fff;
   }
@@ -125,6 +125,12 @@
   <div class="card">
     <label for="customer_id" data-i18n="ui.customerIdLabel">お客様の電話番号</label>
     <input type="tel" id="customer_id" data-i18n="ui.customerIdPlaceholder" data-i18n-attr="placeholder" placeholder="例：09012345678" autocomplete="off" inputmode="tel">
+  </div>
+
+  <div class="card">
+    <label for="treatment_select" data-i18n="ui.treatmentLabel">本日の施術</label>
+    <select id="treatment_select"></select>
+    <input type="text" id="treatment_other" data-i18n="ui.treatmentOtherPlaceholder" data-i18n-attr="placeholder" placeholder="施術名を入力してください" autocomplete="off" style="display:none; margin-top:8px;">
   </div>
 
   <div class="card">

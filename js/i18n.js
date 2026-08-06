@@ -67,6 +67,10 @@ const UI = {
     resetting: "リセット中…",
     customerIdLabel: "お客様の電話番号",
     customerIdPlaceholder: "例：09012345678",
+    treatmentLabel: "本日の施術",
+    treatmentPlaceholder: "選択してください",
+    treatmentOtherPlaceholder: "施術名を入力してください",
+    alertNeedTreatment: "本日の施術を選択してください。",
     guideTitle: "📋 撮影ガイド",
     guide1: "明るい場所で撮影してください",
     guide2: "正面を向いて、カメラと同じ高さで撮影してください",
@@ -119,6 +123,10 @@ const UI = {
     resetting: "Resetting…",
     customerIdLabel: "Customer phone number",
     customerIdPlaceholder: "e.g. 09012345678",
+    treatmentLabel: "Today's treatment",
+    treatmentPlaceholder: "Please select",
+    treatmentOtherPlaceholder: "Enter treatment name",
+    alertNeedTreatment: "Please select today's treatment.",
     guideTitle: "📋 Photo guide",
     guide1: "Take the photo in a bright, well-lit place",
     guide2: "Face forward, with the camera at eye level",
@@ -171,6 +179,10 @@ const UI = {
     resetting: "Resetowanie…",
     customerIdLabel: "Numer telefonu klienta",
     customerIdPlaceholder: "np. 09012345678",
+    treatmentLabel: "Dzisiejszy zabieg",
+    treatmentPlaceholder: "Wybierz",
+    treatmentOtherPlaceholder: "Wpisz nazwę zabiegu",
+    alertNeedTreatment: "Wybierz dzisiejszy zabieg.",
     guideTitle: "📋 Instrukcja zdjęcia",
     guide1: "Zrób zdjęcie w jasnym, dobrze oświetlonym miejscu",
     guide2: "Ustaw się przodem, z kamerą na wysokości oczu",
@@ -361,6 +373,60 @@ const REPORT = {
     footerNote: "※ Ten raport to uproszczony pomiar skóry oparty na przetwarzaniu obrazu i nie stanowi diagnozy medycznej. Wartości mogą się różnić w zależności od oświetlenia i odległości od kamery.",
   },
 };
+
+// ---------- 施術メニュー（撮影時に選択する「本日の施術」） ----------
+// キーはGoogleスプレッドシート（肌診断履歴シート）にそのまま保存される正本値。
+// 表示名だけを言語ごとに切り替える（カテゴリラベルと同じ設計）。
+
+export const TREATMENT_KEYS = [
+  "wodorowe",
+  "peeling_chemiczny",
+  "dermapen",
+  "kobido",
+  "mezoterapia",
+  "mezoterapia_oczu",
+  "other",
+];
+
+const TREATMENTS = {
+  ja: {
+    wodorowe: "水素洗浄（Wodorowe）",
+    peeling_chemiczny: "ケミカルピーリング",
+    dermapen: "ダーマペン",
+    kobido: "小顔リフトマッサージ（Kobido）",
+    mezoterapia: "メソセラピー",
+    mezoterapia_oczu: "目元メソセラピー",
+    other: "その他（自由入力）",
+  },
+  en: {
+    wodorowe: "Hydrogen Cleansing (Wodorowe)",
+    peeling_chemiczny: "Chemical Peeling",
+    dermapen: "Dermapen",
+    kobido: "Kobido Facial Massage",
+    mezoterapia: "Mesotherapy",
+    mezoterapia_oczu: "Eye Mesotherapy",
+    other: "Other (free text)",
+  },
+  pl: {
+    wodorowe: "Wodorowe oczyszczanie",
+    peeling_chemiczny: "Peeling chemiczny",
+    dermapen: "Dermapen",
+    kobido: "Kobido",
+    mezoterapia: "Mezoterapia",
+    mezoterapia_oczu: "Mezoterapia oczu",
+    other: "Inne (wpisz ręcznie)",
+  },
+};
+
+/** 施術キー（wodorowe等）から現在言語の表示名を返す。未知のキーはそのまま返す。 */
+export function treatmentLabel(key) {
+  return (TREATMENTS[_lang] && TREATMENTS[_lang][key]) || TREATMENTS.ja[key] || key;
+}
+
+/** <select>の<option>群を組み立てるための { key, label } 配列（現在言語）。 */
+export function treatmentOptions() {
+  return TREATMENT_KEYS.map((key) => ({ key, label: treatmentLabel(key) }));
+}
 
 const NAMESPACES = { ui: UI, issues: ISSUES, regions: REGIONS, report: REPORT };
 
