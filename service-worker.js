@@ -3,7 +3,7 @@
  * 初回アクセス時に全アセット（HTML/JS/WASM/モデル/アイコン）をキャッシュし、
  * 以降はネットワークなしで（Wi-Fi不要・Macとの接続不要で）完全に端末内動作する。
  */
-const CACHE_VERSION = "betrue-skin-pwa-v10";
+const CACHE_VERSION = "betrue-skin-pwa-v11";
 
 // 修正が入り得る「アプリ本体」ファイル。サイズが小さいため、
 // 通信があれば常に最新を優先し、オフライン時のみキャッシュへフォールバックする
