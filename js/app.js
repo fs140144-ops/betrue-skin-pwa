@@ -9,6 +9,7 @@ import * as metrics from "./metrics.js";
 import * as scoring from "./scoring.js";
 import * as history from "./history.js";
 import * as report from "./report.js";
+import * as i18n from "./i18n.js";
 
 const MAX_PHOTOS = 3;
 const THRESHOLD = 60.0;
@@ -30,7 +31,13 @@ const els = {
   resultSection: document.getElementById("result-section"),
   workCanvas: document.getElementById("work-canvas"),
   resetCacheBtn: document.getElementById("reset-cache-btn"),
+  langSwitcher: document.getElementById("lang-switcher"),
 };
+
+// 静的DOMテキストの一括翻訳＋言語セレクターの描画。
+// setLang()経由の切替時もi18n.js側がapplyDom()を呼ぶため、ここでは初回のみでよい。
+i18n.applyDom();
+i18n.renderLanguageSwitcher(els.langSwitcher);
 
 // 顔検出の初期化・実行はメインスレッドをフリーズさせないよう、
 // すべてWeb Worker（landmarker-worker.js）内で行う。詳細はlandmarker-client.js参照。
@@ -85,16 +92,16 @@ function showFatalError(prefix, err) {
   if (els.resultSection) {
     els.resultSection.innerHTML =
       `<p class="error">⚠ ${prefix}: ${escapeHtml(msg)}<br><span class="small">` +
-      `画面を再読み込みしても直らない場合は、この画面のスクリーンショットを共有してください。</span></p>` +
+      `${i18n.t("ui.screenshotHint")}</span></p>` +
       els.resultSection.innerHTML;
   }
 }
 
 window.addEventListener("error", (event) => {
-  showFatalError("予期しないエラーが発生しました", event.error || event.message);
+  showFatalError(i18n.t("ui.unexpectedError"), event.error || event.message);
 });
 window.addEventListener("unhandledrejection", (event) => {
-  showFatalError("予期しないエラーが発生しました", event.reason);
+  showFatalError(i18n.t("ui.unexpectedError"), event.reason);
 });
 
 // 端末に「壊れた／中途半端な」状態でキャッシュされたファイルが残っていると、
@@ -120,7 +127,7 @@ async function hardResetCache() {
 
 if (els.resetCacheBtn) {
   els.resetCacheBtn.addEventListener("click", () => {
-    els.resetCacheBtn.textContent = "リセット中…";
+    els.resetCacheBtn.textContent = i18n.t("ui.resetting");
     els.resetCacheBtn.disabled = true;
     hardResetCache();
   });
@@ -143,17 +150,12 @@ function withElapsedStatus(promise, label, timeoutMs) {
   const startedAt = Date.now();
   const tick = setInterval(() => {
     const sec = Math.floor((Date.now() - startedAt) / 1000);
-    setStatus(`${label}…（${sec}秒経過。初回は時間がかかります）`);
+    setStatus(`${label}${i18n.t("ui.elapsedSuffix", { sec })}`);
   }, 1000);
 
   const timeout = new Promise((_, reject) => {
     setTimeout(() => {
-      reject(
-        new Error(
-          `${label}がタイムアウトしました。通信環境（できればWi-Fi）を確認のうえ、` +
-            `画面を再読み込みしてもう一度お試しください。何度も失敗する場合は電波の良い場所でお試しください。`,
-        ),
-      );
+      reject(new Error(i18n.t("ui.timeoutMsg", { label })));
     }, timeoutMs);
   });
 
@@ -161,25 +163,25 @@ function withElapsedStatus(promise, label, timeoutMs) {
 }
 
 async function boot() {
-  logStep("初期化中…（初回のみ数十秒〜数分かかる場合があります）");
+  logStep(i18n.t("ui.initializing"));
   // opencv.js のWASMランタイム初期化待ち。onerror/タイムアウトいずれの場合も
   // withElapsedStatusが例外を投げ、下のboot().catch(...)でエラー表示される
   // ため、ここが理由不明なまま無限に固まることはない。
-  await withElapsedStatus(window.cvReady, "画像処理エンジンを読み込み中", 90000);
-  logStep("✓ 画像処理エンジンの準備完了");
+  await withElapsedStatus(window.cvReady, i18n.t("ui.loadingImageEngine"), 90000);
+  logStep(i18n.t("ui.imageEngineReady"));
 
   // 顔検出エンジン・モデルの初期化はWorker内で実行する。万一Worker内で
   // 本当にフリーズしても、landmarkerClient側が180秒でworker.terminate()を
   // 呼んで強制的に打ち切るため、この画面が固まったままになることはない。
   await withElapsedStatus(
     landmarkerClient.init(180000),
-    "顔検出エンジンを読み込み中",
+    i18n.t("ui.loadingFaceEngine"),
     185000,
   );
   landmarkerReady = true;
-  logStep("✓ 顔検出エンジンの読み込み完了");
+  logStep(i18n.t("ui.faceEngineReady"));
 
-  setStatus("準備完了。撮影してください。");
+  setStatus(i18n.t("ui.ready"));
   setTimeout(clearStatus, 1500);
   initCamera();
   wireUi();
@@ -189,7 +191,7 @@ async function boot() {
 
 async function initCamera() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    showFallback("このブラウザはカメラ撮影に対応していません。");
+    showFallback(i18n.t("ui.cameraUnsupported"));
     return;
   }
   try {
@@ -209,15 +211,15 @@ async function initCamera() {
 function cameraErrorMessage(e) {
   const name = e && e.name;
   if (name === "NotAllowedError" || name === "PermissionDeniedError") {
-    return "カメラの使用が許可されていません。ブラウザ／端末の設定でこのアプリのカメラ許可をオンにしてから「カメラをもう一度試す」を押してください。";
+    return i18n.t("ui.cameraNotAllowed");
   }
   if (name === "NotFoundError" || name === "DevicesNotFoundError") {
-    return "カメラが見つかりませんでした。下のボタンから写真を撮影／選択してください。";
+    return i18n.t("ui.cameraNotFound");
   }
   if (name === "NotReadableError" || name === "TrackStartError") {
-    return "カメラが他のアプリで使用中の可能性があります。他のカメラアプリを閉じてから「カメラをもう一度試す」を押してください。";
+    return i18n.t("ui.cameraNotReadable");
   }
-  return `カメラを起動できませんでした（${name || e}）。下のボタンから写真を撮影／選択してください。`;
+  return i18n.t("ui.cameraOtherError", { name: name || e });
 }
 
 function showFallback(reason) {
@@ -275,13 +277,12 @@ function fileToCanvas(file) {
 
 /** 1枚の撮影画像(canvas)に対し、顔検出〜部位測定〜カテゴリ生値算出までを実行し、状態に追加する。 */
 async function processCapturedCanvas(canvas) {
-  els.captureStatus.textContent = "解析中…";
+  els.captureStatus.textContent = i18n.t("ui.analyzingCapture");
   els.captureBtn.disabled = true;
   try {
     const detectResult = await landmarkerClient.detect(canvas, 30000);
     if (!detectResult.faceLandmarks || !detectResult.faceLandmarks.length) {
-      els.captureStatus.textContent =
-        "⚠ 顔を検出できませんでした。正面を向いた明るい写真で再撮影してください。";
+      els.captureStatus.textContent = i18n.t("ui.noFaceDetected");
       return;
     }
     const landmarks = regions.landmarksToPixels(
@@ -308,14 +309,17 @@ async function processCapturedCanvas(canvas) {
     });
 
     addThumb(alignedCanvas, issues);
-    els.captureStatus.textContent =
-      issues.length
-        ? `撮影 ${capturedPhotos.length}/${MAX_PHOTOS} 枚（⚠ ${issues[0]}）`
-        : `撮影 ${capturedPhotos.length}/${MAX_PHOTOS} 枚 OK`;
+    els.captureStatus.textContent = issues.length
+      ? i18n.t("ui.captureStatusWarn", {
+          n: capturedPhotos.length,
+          max: MAX_PHOTOS,
+          issue: i18n.t("issues." + issues[0]),
+        })
+      : i18n.t("ui.captureStatusOk", { n: capturedPhotos.length, max: MAX_PHOTOS });
 
     if (capturedPhotos.length >= MAX_PHOTOS) {
       els.captureBtn.disabled = true;
-      els.captureBtn.textContent = "撮影完了（3枚）";
+      els.captureBtn.textContent = i18n.t("ui.captureBtnComplete");
     }
   } finally {
     if (capturedPhotos.length < MAX_PHOTOS) els.captureBtn.disabled = false;
@@ -336,7 +340,7 @@ function onReset() {
   els.thumbs.innerHTML = "";
   els.captureStatus.textContent = "";
   els.captureBtn.disabled = false;
-  els.captureBtn.textContent = "📸 撮影する";
+  els.captureBtn.textContent = i18n.t("ui.captureBtn");
   els.resultSection.innerHTML = "";
 }
 
@@ -365,22 +369,24 @@ function averageFraming(framingList) {
 async function onAnalyzeClick() {
   const customerId = (els.customerId.value || "").trim();
   if (!customerId) {
-    alert("顧客IDを入力してください。");
+    alert(i18n.t("ui.alertNeedCustomerId"));
     return;
   }
   if (!capturedPhotos.length) {
-    alert("少なくとも1枚は撮影してください。");
+    alert(i18n.t("ui.alertNeedPhoto"));
     return;
   }
 
   els.analyzeBtn.disabled = true;
-  els.resultSection.innerHTML = `<p class="analyzing">解析中…しばらくお待ちください。</p>`;
+  els.resultSection.innerHTML = `<p class="analyzing">${i18n.t("ui.analyzingReport")}</p>`;
   els.resultSection.scrollIntoView({ behavior: "smooth" });
 
   try {
     const categoryRaw = averageCategoryRaw(capturedPhotos.map((p) => p.categoryRaw));
     const framingAvg = averageFraming(capturedPhotos.map((p) => p.framing));
-    let qualityIssues = capturedPhotos.flatMap((p) => p.issues);
+    // capturedPhotos[].issues は表示用の完成文ではなく issues.xxx の翻訳キー
+    // （metrics.jsのassessFraming/assessImageQuality参照）。ここで現在言語の文言に変換する。
+    let qualityIssues = capturedPhotos.flatMap((p) => p.issues).map((key) => i18n.t("issues." + key));
 
     let [prevRecord] = await history.getLatestTwo(customerId);
     if (!prevRecord) {
@@ -389,7 +395,9 @@ async function onAnalyzeClick() {
     }
 
     const driftNote = metrics.compareFramingDrift(framingAvg, prevRecord ? prevRecord.framing : null);
-    if (driftNote) qualityIssues.push(driftNote);
+    if (driftNote) {
+      qualityIssues.push(i18n.t("issues." + driftNote.key, { prev: driftNote.prev, cur: driftNote.cur }));
+    }
     const quality = { issues: Array.from(new Set(qualityIssues)).sort() };
 
     const categoryScores = await scoring.scoreCategories(categoryRaw, customerId);
@@ -402,15 +410,11 @@ async function onAnalyzeClick() {
     let methodNote;
     const usedArr = Array.from(methodsUsed);
     if (usedArr.length && usedArr.every((m) => m === "percentile")) {
-      methodNote = "全カテゴリ、十分な件数の過去データに基づく当サロンの相対比較によるスコアです。";
+      methodNote = i18n.t("ui.methodNoteAllPercentile");
     } else if (methodsUsed.has("percentile") || methodsUsed.has("blended")) {
-      methodNote =
-        "当サロンの過去データとの相対比較を、カテゴリごとのデータ件数に応じた比重で" +
-        "段階的に反映したスコアです（件数が少ないカテゴリほど暫定レンジ方式寄り、" +
-        "件数が増えるほど自動的に相対評価の比重が高まります）。";
+      methodNote = i18n.t("ui.methodNoteBlended");
     } else {
-      methodNote =
-        "データ蓄積中のため暫定レンジによる簡易スコアです。測定件数が増えると自動的に当サロン基準の相対評価へ切り替わります。";
+      methodNote = i18n.t("ui.methodNoteProvisional");
     }
 
     let beforeAfter = null;
@@ -440,7 +444,7 @@ async function onAnalyzeClick() {
     renderResult(html);
   } catch (e) {
     console.error(e);
-    els.resultSection.innerHTML = `<p class="error">解析中にエラーが発生しました: ${escapeHtml(e.message || String(e))}</p>`;
+    els.resultSection.innerHTML = `<p class="error">${escapeHtml(i18n.t("ui.analyzeError", { msg: e.message || String(e) }))}</p>`;
   } finally {
     els.analyzeBtn.disabled = false;
   }
@@ -454,8 +458,8 @@ function escapeHtml(s) {
 
 function renderResult(html) {
   els.resultSection.innerHTML =
-    html + `<div class="report-actions"><button id="print-btn" type="button">🖨 印刷／PDFとして保存</button>
-    <button id="back-btn" type="button">← もう一度測定する</button></div>`;
+    html + `<div class="report-actions"><button id="print-btn" type="button">${i18n.t("ui.printBtn")}</button>
+    <button id="back-btn" type="button">${i18n.t("ui.backBtn")}</button></div>`;
   document.getElementById("print-btn").addEventListener("click", () => window.print());
   document.getElementById("back-btn").addEventListener("click", onReset);
   els.resultSection.scrollIntoView({ behavior: "smooth" });
@@ -484,4 +488,4 @@ if ("serviceWorker" in navigator) {
   });
 }
 
-boot().catch((e) => showFatalError("初期化に失敗しました", e));
+boot().catch((e) => showFatalError(i18n.t("ui.bootFailed"), e));

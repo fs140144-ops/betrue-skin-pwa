@@ -101,6 +101,13 @@
   #print-btn { background: #0090a6; color: #fff; }
   #back-btn { background: #333; color: #ddd; }
 
+  #lang-switcher { display: flex; gap: 6px; margin-bottom: 10px; }
+  .lang-btn {
+    padding: 6px 10px; font-size: 0.78rem; border-radius: 8px; border: 1px solid #444;
+    background: #222; color: #ccc; cursor: pointer;
+  }
+  .lang-btn.active { background: #c2185b; border-color: #c2185b; color: #fff; font-weight: 600; }
+
   @media print {
     body * { visibility: hidden; }
     .report, .report * { visibility: visible; }
@@ -110,23 +117,24 @@
 </style>
 </head>
 <body>
-  <h1>🌸 Be:true 肌測定</h1>
-  <div id="boot-status">読み込み中…</div>
-  <button id="reset-cache-btn" type="button" style="display:none; width:100%; padding:10px; font-size:0.85rem; border-radius:8px; border:1px solid #444; background:#222; color:#ddd; margin-bottom:10px;">🗑 キャッシュをクリアして再試行</button>
+  <div id="lang-switcher"></div>
+  <h1 data-i18n="ui.title">🌸 Be:true 肌測定</h1>
+  <div id="boot-status" data-i18n="ui.loading">読み込み中…</div>
+  <button id="reset-cache-btn" type="button" data-i18n="ui.resetCacheBtn" style="display:none; width:100%; padding:10px; font-size:0.85rem; border-radius:8px; border:1px solid #444; background:#222; color:#ddd; margin-bottom:10px;">🗑 キャッシュをクリアして再試行</button>
 
   <div class="card">
-    <label for="customer_id">顧客ID</label>
-    <input type="text" id="customer_id" placeholder="例：tanaka001" autocomplete="off">
+    <label for="customer_id" data-i18n="ui.customerIdLabel">顧客ID</label>
+    <input type="text" id="customer_id" data-i18n="ui.customerIdPlaceholder" data-i18n-attr="placeholder" placeholder="例：tanaka001" autocomplete="off">
   </div>
 
   <div class="card">
-    <h2 style="margin-top:0;">📋 撮影ガイド</h2>
+    <h2 style="margin-top:0;" data-i18n="ui.guideTitle">📋 撮影ガイド</h2>
     <ul class="checklist">
-      <li>明るい場所で撮影してください</li>
-      <li>正面を向いて、カメラと同じ高さで撮影してください</li>
-      <li>前髪を上げ、メガネ・マスクは外してください</li>
-      <li>無表情で、枠に顔を合わせてください</li>
-      <li>できれば3枚撮影してください（誤差を減らせます）</li>
+      <li data-i18n="ui.guide1">明るい場所で撮影してください</li>
+      <li data-i18n="ui.guide2">正面を向いて、カメラと同じ高さで撮影してください</li>
+      <li data-i18n="ui.guide3">前髪を上げ、メガネ・マスクは外してください</li>
+      <li data-i18n="ui.guide4">無表情で、枠に顔を合わせてください</li>
+      <li data-i18n="ui.guide5">できれば3枚撮影してください（誤差を減らせます）</li>
     </ul>
   </div>
 
@@ -135,18 +143,18 @@
       <video id="camera-video" autoplay playsinline muted></video>
       <div class="guide-overlay">
         <div class="guide-oval"></div>
-        <div class="guide-text">顔をこの枠に合わせてください</div>
+        <div class="guide-text" data-i18n="ui.guideOverlayText">顔をこの枠に合わせてください</div>
       </div>
     </div>
-    <button id="capture-btn" type="button">📸 撮影する</button>
-    <button id="reset-btn" type="button">🔄 撮り直す</button>
+    <button id="capture-btn" type="button" data-i18n="ui.captureBtn">📸 撮影する</button>
+    <button id="reset-btn" type="button" data-i18n="ui.resetBtn">🔄 撮り直す</button>
   </div>
 
   <div class="card" id="fallback-section" style="display:none;">
-    <p id="fallback-note">カメラが使用できないため、下のボタンから写真を撮影／選択してください（最大3枚）。</p>
-    <label id="fallback-label" for="fallback-input" class="fallback-btn">📷 写真を撮る／選択する</label>
+    <p id="fallback-note" data-i18n="ui.fallbackNoteDefault">カメラが使用できないため、下のボタンから写真を撮影／選択してください（最大3枚）。</p>
+    <label id="fallback-label" for="fallback-input" class="fallback-btn" data-i18n="ui.fallbackLabel">📷 写真を撮る／選択する</label>
     <input type="file" id="fallback-input" accept="image/*" capture="environment" multiple style="display:none;">
-    <button id="retry-camera-btn" type="button" class="fallback-btn fallback-btn-secondary">🔄 カメラをもう一度試す</button>
+    <button id="retry-camera-btn" type="button" class="fallback-btn fallback-btn-secondary" data-i18n="ui.retryCameraBtn">🔄 カメラをもう一度試す</button>
   </div>
 
   <div class="card">
@@ -154,7 +162,7 @@
     <div id="thumbs" class="thumbs"></div>
   </div>
 
-  <button id="analyze-btn" type="button">🔬 解析する</button>
+  <button id="analyze-btn" type="button" data-i18n="ui.analyzeBtn">🔬 解析する</button>
 
   <div id="result-section"></div>
 
@@ -176,7 +184,25 @@
         }
       };
       window.onOpenCvError = function () {
-        reject(new Error("画像処理エンジン(opencv.js)の読み込みに失敗しました。通信環境を確認してください。"));
+        // この時点ではまだ js/i18n.js（ESモジュール）が読み込み・実行済みとは限らないため、
+        // ここだけは同じ判定ロジック（保存済み言語 → ブラウザ言語）をこの場に最小限複製する。
+        var lang = "ja";
+        try {
+          var saved = localStorage.getItem("betrue_skin_lang");
+          if (saved === "en" || saved === "pl" || saved === "ja") {
+            lang = saved;
+          } else {
+            var nav = (navigator.language || "ja").toLowerCase();
+            if (nav.indexOf("pl") === 0) lang = "pl";
+            else if (nav.indexOf("en") === 0) lang = "en";
+          }
+        } catch (e) { /* ignore */ }
+        var messages = {
+          ja: "画像処理エンジン(opencv.js)の読み込みに失敗しました。通信環境を確認してください。",
+          en: "Failed to load the image-processing engine (opencv.js). Please check your internet connection.",
+          pl: "Nie udało się wczytać silnika przetwarzania obrazu (opencv.js). Sprawdź połączenie internetowe.",
+        };
+        reject(new Error(messages[lang] || messages.ja));
       };
     });
   </script>

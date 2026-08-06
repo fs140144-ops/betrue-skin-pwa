@@ -3,22 +3,12 @@
  * Python版 report.py の役割を移植。PDF(ReportLab)の代わりに、ブラウザの印刷機能
  * （印刷 → PDFとして保存）で同等の出力を得られるHTML版レポートを生成する。
  */
-import { CATEGORY_CONFIG, CUSTOMER_FRIENDLY_DESC, CATEGORY_CHECK_QUESTIONS } from "./scoring.js";
+import { CATEGORY_CONFIG } from "./scoring.js";
+import * as i18n from "./i18n.js";
+import { categoryLabel, categoryDesc, treatmentMenu, treatmentFrequency, treatmentHomecare, checkQuestions } from "./i18n-categories.js";
 
-export const REGION_LABELS_JA = {
-  forehead: "額",
-  glabella: "眉間",
-  left_cheek: "左頬",
-  right_cheek: "右頬",
-  nose: "鼻",
-  chin: "あご",
-  left_under_eye: "左目下",
-  right_under_eye: "右目下",
-  left_nasolabial: "左ほうれい線",
-  right_nasolabial: "右ほうれい線",
-  left_crow_feet: "左目尻",
-  right_crow_feet: "右目尻",
-};
+// 部位ラベルは i18n.regionLabel(name) で現在言語の文言を取得する
+// （旧 REGION_LABELS_JA は i18n.js の REGIONS テーブルに統合済み）。
 
 const BOX_COLOR = "rgb(60,200,60)";
 
@@ -57,7 +47,7 @@ export function drawRegionsOverlay(srcCanvas, regions) {
   ctx.font = "14px sans-serif";
   for (const [name, [x1, y1, x2, y2]] of Object.entries(regions)) {
     ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
-    const label = REGION_LABELS_JA[name] || name;
+    const label = i18n.regionLabel(name);
     ctx.fillText(label, x1, Math.max(10, y1 - 6));
   }
   return canvas;
@@ -102,7 +92,7 @@ export function drawDiagnosisOverlay(srcCanvas, regions, categoryScores) {
     ctx.fillStyle = color;
     ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
 
-    const label = REGION_LABELS_JA[name] || name;
+    const label = i18n.regionLabel(name);
     ctx.font = "13px sans-serif";
     ctx.fillText(label, x1, Math.max(10, y1 - 6));
 
@@ -117,20 +107,20 @@ export function drawDiagnosisOverlay(srcCanvas, regions, categoryScores) {
 }
 
 function _scoreJudgement(score) {
-  if (score === null || score === undefined) return ["測定不可", "#888888"];
-  if (score >= 75) return ["良好", "#2fa62f"];
-  if (score >= 50) return ["標準", "#0090a6"];
-  return ["要ケア", "#c23b3b"];
+  if (score === null || score === undefined) return [i18n.t("report.judgeUnmeasurable"), "#888888"];
+  if (score >= 75) return [i18n.t("report.judgeGood"), "#2fa62f"];
+  if (score >= 50) return [i18n.t("report.judgeAverage"), "#0090a6"];
+  return [i18n.t("report.judgeNeedsCare"), "#c23b3b"];
 }
 
 function _overallComment(overall) {
   if (overall === null || overall === undefined) {
-    return "測定データが不足しているため、総合評価は算出できませんでした。";
+    return i18n.t("report.overallMissing");
   }
-  if (overall >= 80) return "全体的にとても良い状態です。今の習慣を維持していきましょう。";
-  if (overall >= 65) return "全体的に良好ですが、一部の項目でケアの余地があります。";
-  if (overall >= 50) return "標準的な状態です。気になる項目から重点的にケアしていきましょう。";
-  return "複数の項目でケアが必要な状態です。集中的なケアをおすすめします。";
+  if (overall >= 80) return i18n.t("report.overallGreat");
+  if (overall >= 65) return i18n.t("report.overallGood");
+  if (overall >= 50) return i18n.t("report.overallAverage");
+  return i18n.t("report.overallNeedsCare");
 }
 
 function esc(s) {
@@ -156,7 +146,7 @@ export function buildTextSummary(customerId, categoryScores, overall, recommenda
   lines.push("【カテゴリ別スコア】（実測値に基づく根拠つき）");
   let i = 1;
   for (const [catKey, info] of Object.entries(categoryScores)) {
-    const label = CATEGORY_CONFIG[catKey].label;
+    const label = categoryLabel(catKey);
     const score = info.score;
     lines.push(`  - ${label}: ${score !== null && score !== undefined ? score : "--"} 点`);
     i += 1;
@@ -167,12 +157,15 @@ export function buildTextSummary(customerId, categoryScores, overall, recommenda
   if (recommendations && Object.keys(recommendations).length) {
     lines.push("");
     lines.push("【おすすめ施術（スコアが低い項目）】");
-    for (const info of Object.values(recommendations)) {
-      const menu = info.suggested_menu.length ? info.suggested_menu.join("、") : "（メニュー未設定）";
-      lines.push(`  - ${info.label}（${info.score}点）`);
+    for (const [catKey, info] of Object.entries(recommendations)) {
+      const menuList = treatmentMenu(catKey);
+      const menu = menuList.length ? menuList.join("、") : i18n.t("report.noMenuSet");
+      lines.push(`  - ${categoryLabel(catKey)}（${info.score}点）`);
       lines.push(`      施術: ${menu}`);
-      if (info.frequency) lines.push(`      目安回数: ${info.frequency}`);
-      if (info.homecare) lines.push(`      ホームケア: ${info.homecare}`);
+      const frequency = treatmentFrequency(catKey);
+      const homecare = treatmentHomecare(catKey);
+      if (frequency) lines.push(`      目安回数: ${frequency}`);
+      if (homecare) lines.push(`      ホームケア: ${homecare}`);
     }
   }
 
@@ -182,13 +175,13 @@ export function buildTextSummary(customerId, categoryScores, overall, recommenda
     for (const [catKey, d] of Object.entries(beforeAfter)) {
       if (!d) continue;
       if (d.status === "no_change") {
-        lines.push(`  - ${d.label}: 誤差範囲内（変化なし）`);
+        lines.push(`  - ${categoryLabel(catKey)}: 誤差範囲内（変化なし）`);
       } else {
         const arrow = d.improved ? "改善" : "要注意";
         const sign = d.diff >= 0 ? "+" : "";
-        lines.push(`  - ${d.label}: ${sign}${d.diff.toFixed(2)}${d.unit}（${arrow}）`);
+        lines.push(`  - ${categoryLabel(catKey)}: ${sign}${d.diff.toFixed(2)}${d.unit}（${arrow}）`);
         if (!d.improved) {
-          for (const q of CATEGORY_CHECK_QUESTIONS[catKey] || []) {
+          for (const q of checkQuestions(catKey)) {
             lines.push(`      ▶ ${q}`);
           }
         }
@@ -207,37 +200,37 @@ export function buildHtmlReport({
   customerId, categoryScores, overall, recommendations, methodNote,
   scoreCardDataUrl, diagnosisDataUrl, beforeAfter, quality,
 }) {
-  const dateStr = new Date().toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" });
+  const dateStr = new Date().toLocaleDateString(i18n.dateLocale(), { year: "numeric", month: "long", day: "numeric" });
 
   let html = `<div class="report">`;
-  html += `<h1>肌測定レポート</h1>`;
-  html += `<p class="sub">Be:true　顧客ID: ${esc(customerId)}　測定日: ${dateStr}</p>`;
+  html += `<h1>${esc(i18n.t("report.reportTitle"))}</h1>`;
+  html += `<p class="sub">${esc(i18n.t("report.subLine", { id: customerId, date: dateStr }))}</p>`;
 
   const overallTxt = overall !== null && overall !== undefined ? overall.toFixed(1) : "--";
-  html += `<h2>総合スコア　${overallTxt} / 100</h2>`;
+  html += `<h2>${esc(i18n.t("report.overallHeading", { score: overallTxt }))}</h2>`;
   html += `<p>${esc(_overallComment(overall))}</p>`;
 
   if (quality && quality.issues && quality.issues.length) {
-    html += `<h2>撮影時の注意点</h2>`;
+    html += `<h2>${esc(i18n.t("report.qualityHeading"))}</h2>`;
     for (const issue of quality.issues) {
       html += `<p class="warn">・${esc(issue)}</p>`;
     }
   }
 
   if (diagnosisDataUrl) {
-    html += `<h2>顔写真での診断部位</h2>`;
-    html += `<p>お顔の各部位に測定項目の番号を表示しています。枠の色は良好(緑)・標準(青)・要ケア(赤)の目安です。番号は下表の「No.」列に対応しています。</p>`;
-    html += `<img class="diagnosis-img" src="${diagnosisDataUrl}" alt="診断部位画像" />`;
+    html += `<h2>${esc(i18n.t("report.diagnosisHeading"))}</h2>`;
+    html += `<p>${esc(i18n.t("report.diagnosisDesc"))}</p>`;
+    html += `<img class="diagnosis-img" src="${diagnosisDataUrl}" alt="${esc(i18n.t("report.diagnosisHeading"))}" />`;
   }
 
-  html += `<h2>項目別スコア</h2>`;
-  html += `<table class="score-table"><thead><tr><th>No.</th><th>項目</th><th>スコア</th><th>判定</th><th>内容</th></tr></thead><tbody>`;
+  html += `<h2>${esc(i18n.t("report.scoreHeading"))}</h2>`;
+  html += `<table class="score-table"><thead><tr><th>${esc(i18n.t("report.colNo"))}</th><th>${esc(i18n.t("report.colItem"))}</th><th>${esc(i18n.t("report.colScore"))}</th><th>${esc(i18n.t("report.colJudge"))}</th><th>${esc(i18n.t("report.colContent"))}</th></tr></thead><tbody>`;
   let i = 1;
   for (const [catKey, info] of Object.entries(categoryScores)) {
-    const label = CATEGORY_CONFIG[catKey].label;
+    const label = categoryLabel(catKey);
     const score = info.score;
     const [judge, judgeColor] = _scoreJudgement(score);
-    const desc = CUSTOMER_FRIENDLY_DESC[catKey] || "";
+    const desc = categoryDesc(catKey);
     html += `<tr>`;
     html += `<td>${i}</td>`;
     html += `<td>${esc(label)}</td>`;
@@ -251,15 +244,16 @@ export function buildHtmlReport({
   html += `<p class="small">※ ${esc(methodNote)}</p>`;
 
   if (recommendations && Object.keys(recommendations).length) {
-    html += `<h2>おすすめ施術</h2>`;
-    html += `<table class="reco-table"><thead><tr><th>項目</th><th>施術メニュー</th><th>目安の頻度</th><th>ホームケア</th></tr></thead><tbody>`;
-    for (const info of Object.values(recommendations)) {
-      const menu = info.suggested_menu.length ? info.suggested_menu.join("、") : "（メニュー未設定）";
+    html += `<h2>${esc(i18n.t("report.recoHeading"))}</h2>`;
+    html += `<table class="reco-table"><thead><tr><th>${esc(i18n.t("report.colItem"))}</th><th>${esc(i18n.t("report.colMenu"))}</th><th>${esc(i18n.t("report.colFrequency"))}</th><th>${esc(i18n.t("report.colHomecare"))}</th></tr></thead><tbody>`;
+    for (const [catKey, info] of Object.entries(recommendations)) {
+      const menuList = treatmentMenu(catKey);
+      const menu = menuList.length ? menuList.join("、") : i18n.t("report.noMenuSet");
       html += `<tr>`;
-      html += `<td>${esc(info.label)}（${info.score.toFixed(0)}点）</td>`;
+      html += `<td>${esc(categoryLabel(catKey))}（${info.score.toFixed(0)}点）</td>`;
       html += `<td>${esc(menu)}</td>`;
-      html += `<td>${esc(info.frequency || "")}</td>`;
-      html += `<td>${esc(info.homecare || "")}</td>`;
+      html += `<td>${esc(treatmentFrequency(catKey) || "")}</td>`;
+      html += `<td>${esc(treatmentHomecare(catKey) || "")}</td>`;
       html += `</tr>`;
     }
     html += `</tbody></table>`;
@@ -267,15 +261,15 @@ export function buildHtmlReport({
 
   if (beforeAfter) {
     const changed = Object.entries(beforeAfter).filter(([, d]) => d && d.status !== "no_change");
-    html += `<h2>前回からの変化</h2>`;
+    html += `<h2>${esc(i18n.t("report.changeHeading"))}</h2>`;
     if (!changed.length) {
-      html += `<p>前回測定時から大きな変化は見られませんでした（すべて誤差範囲内）。</p>`;
+      html += `<p>${esc(i18n.t("report.noChangeAtAll"))}</p>`;
     } else {
       for (const [catKey, d] of changed) {
-        const arrow = d.improved ? "改善しています" : "やや悪化しています。重点ケアをおすすめします";
-        html += `<p>・${esc(d.label)}：${arrow}</p>`;
+        const arrow = d.improved ? i18n.t("report.improved") : i18n.t("report.worsened");
+        html += `<p>・${esc(categoryLabel(catKey))}：${esc(arrow)}</p>`;
         if (!d.improved) {
-          for (const q of CATEGORY_CHECK_QUESTIONS[catKey] || []) {
+          for (const q of checkQuestions(catKey)) {
             html += `<p class="small indent">－ ${esc(q)}</p>`;
           }
         }
@@ -283,7 +277,7 @@ export function buildHtmlReport({
     }
   }
 
-  html += `<p class="small footer-note">※ 本レポートは画像処理による簡易的な肌測定であり、医療的診断ではありません。光の当たり方・撮影距離により数値は変動する場合があります。</p>`;
+  html += `<p class="small footer-note">${esc(i18n.t("report.footerNote"))}</p>`;
   html += `</div>`;
   return html;
 }

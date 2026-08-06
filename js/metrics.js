@@ -338,10 +338,14 @@ export function computeRegionMetrics(regionCrops) {
   return out;
 }
 
-/** 顔全体の画像品質を診断（ブレ・露出）。canvas(アライン済み顔全体)を渡す。 */
+/**
+ * 顔全体の画像品質を診断（ブレ・露出）。canvas(アライン済み顔全体)を渡す。
+ * issuesは表示用の完成文ではなく、i18n.t("issues."+key)で解決するための
+ * 短いキー文字列の配列を返す（多言語対応のため）。
+ */
 export function assessImageQuality(faceCanvas) {
   if (!isValidCanvas(faceCanvas)) {
-    return { ok: false, issues: ["顔領域を取得できませんでした"] };
+    return { ok: false, issues: ["noFaceRegion"] };
   }
   const rgba = cv.imread(faceCanvas);
   const gray = new cv.Mat();
@@ -353,12 +357,12 @@ export function assessImageQuality(faceCanvas) {
 
   const issues = [];
   if (sharpness < 40) {
-    issues.push("画像がブレ気味です（毛穴・キメ・シワ系スコアの精度が低下する可能性）");
+    issues.push("blurry");
   }
   if (meanBrightness < 60) {
-    issues.push("暗すぎます（色ムラ・赤み・シミ系スコアの精度が低下する可能性）");
+    issues.push("tooDark");
   } else if (meanBrightness > 210) {
-    issues.push("明るすぎます／白飛びしています（色調系スコアの精度が低下する可能性）");
+    issues.push("tooBright");
   }
 
   return {
@@ -378,39 +382,47 @@ export const PITCH_DEG_MAX = 10.0;
 export const YAW_DEG_MAX = 15.0;
 export const FRAMING_DRIFT_THRESHOLD = 0.1;
 
-/** 撮影時のフレーミング（顔サイズ・位置・傾き・向き）を評価する。 */
+/**
+ * 撮影時のフレーミング（顔サイズ・位置・傾き・向き）を評価する。
+ * issuesは表示用の完成文ではなく、i18n.t("issues."+key)で解決するための
+ * 短いキー文字列の配列を返す（多言語対応のため）。
+ */
 export function assessFraming(framing) {
   const issues = [];
   const faceHRatio = framing.face_h_ratio;
   if (faceHRatio < FACE_H_RATIO_MIN) {
-    issues.push("顔が小さく写っています（カメラから遠い可能性）。もう少し近づいて撮影してください。");
+    issues.push("faceTooSmall");
   } else if (faceHRatio > FACE_H_RATIO_MAX) {
-    issues.push("顔が大きく写りすぎています（カメラに近すぎる可能性）。もう少し離れて撮影してください。");
+    issues.push("faceTooLarge");
   }
 
   if (
     Math.abs(framing.center_offset_x) > CENTER_OFFSET_MAX ||
     Math.abs(framing.center_offset_y) > CENTER_OFFSET_MAX
   ) {
-    issues.push("顔が画面中央からずれています。正面中央に来るように撮り直してください。");
+    issues.push("offCenter");
   }
 
   if (Math.abs(framing.tilt_deg) > TILT_DEG_MAX) {
-    issues.push("顔・カメラが傾いています（首かしげ）。まっすぐ正面を向いて撮影してください。");
+    issues.push("tilted");
   }
 
   if (Math.abs(framing.pitch_deg || 0.0) > PITCH_DEG_MAX) {
-    issues.push("顔がうつむき・あおむき気味です。カメラを目線の高さに合わせ、正面から撮影してください。");
+    issues.push("pitchOff");
   }
 
   if (Math.abs(framing.yaw_deg || 0.0) > YAW_DEG_MAX) {
-    issues.push("顔が横を向いています。カメラのレンズを正面から見て撮影してください。");
+    issues.push("yawOff");
   }
 
   return { ok: issues.length === 0, issues };
 }
 
-/** 前回セッションと今回セッションの撮影距離（顔サイズ比率）を比較。 */
+/**
+ * 前回セッションと今回セッションの撮影距離（顔サイズ比率）を比較。
+ * 完成文ではなく {key, prev, cur} を返し、呼び出し側で
+ * i18n.t("issues.framingDrift", {prev, cur}) のように組み立てる。
+ */
 export function compareFramingDrift(current, previous) {
   if (!current || !previous) return null;
   const cur = current.face_h_ratio;
@@ -418,9 +430,9 @@ export function compareFramingDrift(current, previous) {
   if (cur == null || prev == null) return null;
   const drift = cur - prev;
   if (Math.abs(drift) <= FRAMING_DRIFT_THRESHOLD) return null;
-  return (
-    `前回撮影時と顔の大きさ（撮影距離の目安）が異なります` +
-    `（前回${(prev * 100).toFixed(0)}% → 今回${(cur * 100).toFixed(0)}%）。` +
-    `Before/Afterの数値差には撮影距離の違いによる影響が含まれる可能性があります。`
-  );
+  return {
+    key: "framingDrift",
+    prev: (prev * 100).toFixed(0),
+    cur: (cur * 100).toFixed(0),
+  };
 }
