@@ -13,6 +13,9 @@ import * as i18n from "./i18n.js";
 
 const MAX_PHOTOS = 3;
 const THRESHOLD = 60.0;
+// 診断結果の同期先（ダッシュボード用バックエンド）。オフラインでも本体機能が
+// 止まらないよう、送信は常にベストエフォート（失敗しても何もしない）にする。
+const SYNC_ENDPOINT = "https://betrue-booking-form.onrender.com/api/diagnosis/sync";
 
 const els = {
   statusBox: document.getElementById("boot-status"),
@@ -367,7 +370,8 @@ function averageFraming(framingList) {
 }
 
 async function onAnalyzeClick() {
-  const customerId = (els.customerId.value || "").trim();
+  // customerId = お客様の電話番号（正規化済み）。IndexedDBの保存キー・同期キーとして共通で使う。
+  const customerId = normalizePhone(els.customerId.value);
   if (!customerId) {
     alert(i18n.t("ui.alertNeedCustomerId"));
     return;
@@ -422,12 +426,27 @@ async function onAnalyzeClick() {
       beforeAfter = scoring.compareBeforeAfter(prevRecord.raw_metrics, categoryRaw);
     }
 
+    const recordTimestamp = new Date().toISOString();
+    const scoresByCategory = Object.fromEntries(
+      Object.entries(categoryScores).map(([k, v]) => [k, v.score]),
+    );
+
     await history.saveRecord(customerId, {
+      timestamp: recordTimestamp,
       raw_metrics: categoryRaw,
       framing: framingAvg,
-      scores: Object.fromEntries(Object.entries(categoryScores).map(([k, v]) => [k, v.score])),
+      scores: scoresByCategory,
       overall,
       photo_count: capturedPhotos.length,
+    });
+
+    // ダッシュボード同期はベストエフォート・fire-and-forget（awaitしない）。
+    // 失敗してもレポート表示・IndexedDB保存は既に完了しているため影響しない。
+    syncDiagnosisToServer({
+      phone: customerId,
+      timestamp: recordTimestamp,
+      overall,
+      scores: scoresByCategory,
     });
 
     const firstPhoto = capturedPhotos[0];
@@ -447,6 +466,36 @@ async function onAnalyzeClick() {
     els.resultSection.innerHTML = `<p class="error">${escapeHtml(i18n.t("ui.analyzeError", { msg: e.message || String(e) }))}</p>`;
   } finally {
     els.analyzeBtn.disabled = false;
+  }
+}
+
+// 電話番号の正規化（スペース・ハイフン・カッコを除去）。
+// サーバー側（booking_form/app.py の _normalize_phone）と同じルールにしておくことで、
+// 「080-1234-5678」「080 1234 5678」など表記ゆれがあっても同一顧客として同期・照合できる。
+function normalizePhone(raw) {
+  return String(raw || "").replace(/[\s\-()]/g, "");
+}
+
+/**
+ * 診断結果をスタッフ確認用ダッシュボード（Flaskバックエンド）へベストエフォートで同期する。
+ * - 完全オフライン動作を壊さないよう、失敗しても何もしない（IndexedDBには既に保存済み）。
+ * - awaitせずに呼び出す（fire-and-forget）。UI描画をブロックしない。
+ */
+function syncDiagnosisToServer(payload) {
+  try {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+    if (typeof fetch !== "function") return;
+    fetch(SYNC_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    }).catch(() => {
+      // オフライン／サーバーエラー時は握りつぶす。次回オンライン時の解析成功で
+      // 改めて同期されるため、ここでのリトライは行わない。
+    });
+  } catch (e) {
+    // fetch自体が例外を投げるような環境でも、解析フロー自体には影響させない。
   }
 }
 
