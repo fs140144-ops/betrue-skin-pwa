@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Be:true｜Instrukcja obsługi aplikacji do analizy skóry</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Hiragino Sans', 'Meiryo', sans-serif; background: #f8f5f2; color: #2d2d2d; padding: 36px 20px; }
+    .container { max-width: 860px; margin: 0 auto; }
+    .header { background: linear-gradient(135deg, #2d2d2d 0%, #4a4a4a 100%); color: white; padding: 28px 36px; border-radius: 14px; margin-bottom: 20px; }
+    .header h1 { font-size: 19px; font-weight: 700; margin-bottom: 5px; }
+    .header .subtitle { font-size: 11px; opacity: 0.6; letter-spacing: 0.1em; margin-bottom: 12px; }
+    .header .purpose { background: rgba(255,255,255,0.12); border-left: 3px solid #c9a96e; padding: 9px 14px; font-size: 13px; border-radius: 0 8px 8px 0; }
+    .section { background: white; border-radius: 12px; padding: 22px 26px; margin-bottom: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    .section h2 { font-size: 13px; font-weight: 700; border-bottom: 2px solid #c9a96e; padding-bottom: 7px; margin-bottom: 16px; letter-spacing: 0.04em; }
+    .checklist { list-style: none; }
+    .checklist li { padding: 7px 0; font-size: 13px; border-bottom: 1px solid #f5f5f5; display: flex; align-items: flex-start; gap: 8px; }
+    .checklist li:last-child { border-bottom: none; }
+    .checklist li::before { content: '□'; font-size: 15px; color: #c9a96e; flex-shrink: 0; margin-top: 1px; }
+    .note { background: #fdf8f0; border-left: 3px solid #c9a96e; padding: 7px 12px; font-size: 12px; color: #7a5c2e; border-radius: 0 6px 6px 0; margin-top: 10px; }
+    .tip { margin-top: 7px; background: #e8f4e8; border-left: 3px solid #4caf50; padding: 6px 12px; font-size: 12px; color: #2e7d32; border-radius: 0 6px 6px 0; }
+    .warn { margin-top: 7px; background: #fff3e0; border-left: 3px solid #ff9800; padding: 6px 12px; font-size: 12px; color: #e65100; border-radius: 0 6px 6px 0; }
+    .phone-note { margin-top: 12px; background: #e8f4fd; border-left: 3px solid #42a5f5; padding: 8px 14px; font-size: 12px; color: #1565c0; border-radius: 0 6px 6px 0; }
+
+    .access-box { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+    .access-box .qr { width: 120px; height: 120px; border: 1px solid #eee; border-radius: 8px; padding: 6px; flex-shrink: 0; }
+    .access-box .qr img { width: 100%; height: 100%; object-fit: contain; }
+    .access-box .url-box { flex: 1; min-width: 220px; }
+    .access-box .url-box .label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: #888; margin-bottom: 4px; }
+    .access-box .url-box .url { font-size: 14px; font-weight: 700; color: #2d2d2d; word-break: break-all; }
+
+    .sequence { display: flex; flex-direction: column; gap: 3px; }
+    .seq-step { background: #f5f5f5; border-left: 3px solid #bbb; padding: 10px 14px; border-radius: 0 7px 7px 0; font-size: 13px; }
+    .seq-step .step-tag { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: #888; margin-bottom: 3px; }
+    .seq-step.on { border-left-color: #42a5f5; background: #e8f4fd; }
+    .seq-step.on .step-tag { color: #1565c0; }
+    .seq-step.mid { border-left-color: #ff9800; background: #fff8f0; }
+    .seq-step.mid .step-tag { color: #e65100; }
+    .seq-step.done { border-left-color: #66bb6a; background: #eef7ee; }
+    .seq-step.done .step-tag { color: #2e7d32; }
+    .seq-arrow { color: #bbb; font-size: 16px; padding-left: 20px; }
+
+    .objection { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #f0f0f0; }
+    .objection:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+    .objection-title { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+    .objection-num { background: #2d2d2d; color: white; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+    .objection-q { font-size: 13px; font-weight: 700; }
+    .objection p.a { font-size: 12px; color: #555; line-height: 1.8; margin-left: 32px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+    th { background: #2d2d2d; color: white; padding: 8px 12px; text-align: left; font-size: 11px; }
+    td { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+
+    .summary { background: linear-gradient(135deg, #2d2d2d 0%, #4a4a4a 100%); color: white; padding: 22px 28px; border-radius: 12px; text-align: center; font-size: 14px; line-height: 2.2; font-weight: 700; }
+    .summary span { color: #c9a96e; }
+    .footer { text-align: center; margin-top: 14px; font-size: 11px; color: #bbb; }
+
+    @media print {
+      body { background: white; padding: 0; }
+      .section { box-shadow: none; border: 1px solid #eee; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="subtitle">Be:true SALON ｜ SKIN SCAN MANUAL ver.1</div>
+    <h1>Instrukcja obsługi aplikacji do analizy skóry</h1>
+    <div class="purpose">Cel: rejestrować stan skóry w liczbach przed i po zabiegu, aby jasno pokazać klientce, który zabieg i jak bardzo pomógł.</div>
+  </div>
+
+  <div class="section" style="text-align:center; padding:16px 20px;">
+    <div style="font-size:13px; font-weight:700; color:#c9a96e; letter-spacing:0.04em;">📌 Zasada: pomiar skóry wykonujemy przy każdej wizycie</div>
+    <div style="font-size:12px; color:#777; margin-top:4px;">Nie tylko przy pierwszej wizycie — rób zdjęcia przy każdej kolejnej wizycie. Im więcej danych, tym dokładniej można pokazać efekt zabiegów.</div>
+  </div>
+
+  <!-- Dostęp do aplikacji -->
+  <div class="section">
+    <h2>Jak otworzyć aplikację</h2>
+    <div class="access-box">
+      <div class="qr"><img src="qr/betrue_skin_pwa_qr.png" alt="Kod QR aplikacji do analizy skóry"></div>
+      <div class="url-box">
+        <div class="label">ADRES URL (otwórz w przeglądarce telefonu)</div>
+        <div class="url">https://betrue-skin-pwa.onrender.com</div>
+      </div>
+    </div>
+    <div class="note">📱 Warto dodać stronę do ekranu głównego — będzie działać jak aplikacja (Safari/Chrome → „Udostępnij” → „Dodaj do ekranu głównego”).</div>
+  </div>
+
+  <!-- Przed rozpoczęciem -->
+  <div class="section">
+    <h2>Sprawdź przed rozpoczęciem zdjęć</h2>
+    <ul class="checklist">
+      <li>Aplikacja jest otwarta na telefonie personelu (nie klientki — to personel wykonuje zdjęcia)</li>
+      <li>Dostęp do aparatu jest zezwolony (okno z prośbą pojawia się tylko przy pierwszym użyciu)</li>
+      <li>Jesteśmy w dobrze oświetlonym miejscu</li>
+      <li>Klientka ma odsłonięte czoło, zdjęte okulary i maseczkę</li>
+      <li>Wiadomo, jaki zabieg będzie dziś wykonany (potrzebne w kolejnym kroku)</li>
+    </ul>
+  </div>
+
+  <!-- Warunki zdjęcia i dlaczego -->
+  <div class="section">
+    <h2>Warunki wykonywania zdjęć i dlaczego są ważne</h2>
+    <p style="font-size:13px; line-height:1.8; color:#555; margin-bottom:10px;">
+      Poniższe warunki nie służą tylko „ładnemu zdjęciu” — <strong>chodzi o to, by za każdym razem fotografować w takich samych warunkach, dzięki czemu można odróżnić, czy zmiana wyniku wynika naprawdę ze zmiany stanu skóry, czy tylko z innego sposobu zrobienia zdjęcia.</strong> Jeśli warunki się różnią, liczby w „Podsumowaniu skuteczności zabiegów” tracą wiarygodność.
+    </p>
+    <table>
+      <tr><th>Warunek</th><th>Dlaczego</th></tr>
+      <tr>
+        <td>Rób zdjęcie w jasnym miejscu</td>
+        <td>W ciemności powstają cienie, co obniża dokładność wykrywania porów, przebarwień i szarości cery. Jeśli jasność zmienia się za każdym razem, sam ten kontrast zmienia wynik — nie da się go odróżnić od efektu zabiegu.</td>
+      </tr>
+      <tr>
+        <td>Zdjęcie przodem, kamera na wysokości oczu</td>
+        <td>Zmiana kąta zmienia sposób padania cieni i widoczność porów, co zaburza wynik AI. Ten sam kąt za każdym razem pozwala uczciwie porównywać zdjęcia z różnych dni.</td>
+      </tr>
+      <tr>
+        <td>Odsłoń czoło, zdejmij okulary i maseczkę</td>
+        <td>Zasłonięta część twarzy oznacza brakujący obszar analizy — wyniki dot. przebarwień, porów itd. nie będą poprawnie obliczone.</td>
+      </tr>
+      <tr>
+        <td>Neutralny wyraz twarzy, twarz w ramce</td>
+        <td>Wyraz twarzy zmienia widoczność zmarszczek (np. uśmiech podkreśla bruzdy nosowo-wargowe). Dopasowanie do ramki zapewnia ten sam rozmiar i pozycję twarzy za każdym razem, dzięki czemu AI analizuje względem tych samych punktów odniesienia.</td>
+      </tr>
+      <tr>
+        <td>Jeśli to możliwe, zrób 3 zdjęcia</td>
+        <td>Przy jednym zdjęciu poruszenie ręki, mrugnięcie czy odbicie światła mogą przypadkowo zaburzyć wynik. Uśrednienie kilku zdjęć zmniejsza błąd i daje stabilniejszy wynik.</td>
+      </tr>
+    </table>
+    <div class="warn">⚠ Jeśli warunki zdjęć różnią się za każdym razem, nie da się stwierdzić, czy „zabieg zadziałał”, czy „zmienił się tylko sposób robienia zdjęcia”. Aby móc pewnie pokazać klientce efekt, zawsze zachowuj te same warunki.</div>
+  </div>
+
+  <!-- Kroki użytkowania -->
+  <div class="section">
+    <h2>Jak korzystać z aplikacji (5 kroków)</h2>
+    <div class="sequence">
+      <div class="seq-step on">
+        <div class="step-tag">KROK 1｜Numer telefonu</div>
+        Wpisz numer telefonu klientki. To jest klucz łączący dane z jej kartą klientki (różnice w zapisie, np. myślniki, są automatycznie ignorowane).
+      </div>
+      <div class="seq-arrow">↓</div>
+      <div class="seq-step on">
+        <div class="step-tag">KROK 2｜Wybierz dzisiejszy zabieg</div>
+        Z listy „Dzisiejszy zabieg” wybierz odpowiednią pozycję (wodorowe oczyszczanie / peeling chemiczny / dermapen / kobido / mezoterapia / mezoterapia oczu). Jeśli żadna nie pasuje, wybierz „Inne” i wpisz nazwę zabiegu ręcznie. <strong>Bez wyboru nie można przejść do analizy.</strong>
+      </div>
+      <div class="seq-arrow">↓</div>
+      <div class="seq-step mid">
+        <div class="step-tag">KROK 3｜Zdjęcie</div>
+        Dopasuj twarz klientki do ramki (owal z przerywaną linią), zdjęcie rób przodem, na wysokości kamery, z neutralnym wyrazem twarzy. Aby zmniejszyć błąd pomiaru, zrób jeśli to możliwe 3 zdjęcia. Aby powtórzyć zdjęcie, użyj „🔄 Zrób ponownie”.
+      </div>
+      <div class="seq-arrow">↓</div>
+      <div class="seq-step mid">
+        <div class="step-tag">KROK 4｜Analiza</div>
+        Dotknij „🔬 Analizuj”. W kilka do kilkunastu sekund automatycznie wyliczane są wyniki dla 17 kategorii (pory, przebarwienia, zmarszczki, zaczerwienienie, cienie pod oczami, błyszczenie itd.).
+      </div>
+      <div class="seq-arrow">↓</div>
+      <div class="seq-step done">
+        <div class="step-tag">KROK 5｜Wynik</div>
+        Wyświetla się raport z wynikiem ogólnym, 17 wynikami szczegółowymi i zalecaną pielęgnacją. Przyciskiem „🖨 Drukuj” można od razu wydrukować raport. Wynik jest automatycznie wysyłany na serwer i gromadzony jako historia zmian na kolejne wizyty.
+      </div>
+    </div>
+  </div>
+
+  <!-- Gdy kamera nie działa -->
+  <div class="section">
+    <h2>Gdy nie można użyć kamery</h2>
+    <p style="font-size:13px; line-height:1.8; color:#555;">
+      Jeśli dostęp do aparatu nie jest zezwolony lub jest zajęty przez inną aplikację, ekran automatycznie przełącza się na przycisk „Zrób lub wybierz zdjęcie”. Można wtedy zrobić zdjęcie standardowym aparatem telefonu albo wybrać zdjęcie z galerii (maksymalnie 3 zdjęcia). Przyciskiem „🔄 Spróbuj kamery ponownie” można wrócić do ekranu kamery.
+    </p>
+  </div>
+
+  <!-- Strona podglądu dla personelu -->
+  <div class="section">
+    <h2>Jak otworzyć stronę podglądu dla personelu (historia klientki)</h2>
+    <p style="font-size:13px; line-height:1.8; color:#555; margin-bottom:10px;">
+      Przy tworzeniu rezerwacji w SATTOU, link do strony podglądu danej klientki jest automatycznie wpisywany w pole notatki (notatki) rezerwacji. Skopiuj adres URL z notatki i wklej go w przeglądarce, aby zobaczyć poniższe informacje.
+    </p>
+    <table>
+      <tr><th>📋 Historia wizyt i zabiegów</th><td>Lista dat wizyt, osoby wykonującej zabieg i rodzaju zabiegu z karty klientki i bazy danych</td></tr>
+      <tr><th>🔬 Trendy wyników diagnozy skóry</th><td>Wynik ogólny i 17 wyników szczegółowych dla każdej daty pomiaru (widać też, przy jakim zabiegu wykonano pomiar)</td></tr>
+      <tr><th>📊 Podsumowanie skuteczności zabiegów</th><td>Automatyczne podsumowanie dla każdego zabiegu: liczba wykonań, wynik pierwszy → ostatni, zmiana (dodatnia = poprawa). Można użyć wprost w rozmowie z klientką.</td></tr>
+    </table>
+    <div class="warn">⚠ Link w notatce nie otwiera się po dotknięciu (ograniczenie SATTOU). Trzeba przytrzymać/zaznaczyć adres URL, skopiować go i wkleić w pasku adresu przeglądarki.</div>
+    <div class="note">🔔 Dodatkowo: zaraz po zakończeniu analizy skóry na telefon właściciela przychodzi powiadomienie push. Wystarczy je dotknąć, aby od razu otworzyć tę samą stronę (przydatne do szybkiego sprawdzenia zaraz po pomiarze).</div>
+    <div class="note">🌐 Przełącznikiem języka w prawym górnym rogu (日本語／English／Polski) można zmienić język wyświetlany klientce.</div>
+  </div>
+
+  <!-- Częste problemy -->
+  <div class="section">
+    <h2>Najczęstsze problemy — pytania i odpowiedzi</h2>
+    <div class="objection">
+      <div class="objection-title">
+        <div class="objection-num">1</div>
+        <div class="objection-q">Ładowanie zatrzymuje się przy uruchomieniu i nic się nie dzieje</div>
+      </div>
+      <p class="a">Dotknij przycisku „🗑 Wyczyść pamięć podręczną i spróbuj ponownie” u góry ekranu. Sprawdź połączenie internetowe (Wi-Fi) i spróbuj ponownie.</p>
+    </div>
+    <div class="objection">
+      <div class="objection-title">
+        <div class="objection-num">2</div>
+        <div class="objection-q">Pojawia się komunikat „Wybierz dzisiejszy zabieg” i nie można przejść dalej</div>
+      </div>
+      <p class="a">Lista w KROKU 2 nie została wybrana (lub przy „Inne” nie wpisano nazwy zabiegu). Zawsze wybierz zabieg przed analizą.</p>
+    </div>
+    <div class="objection">
+      <div class="objection-title">
+        <div class="objection-num">3</div>
+        <div class="objection-q">Wynik analizy nie pojawia się na stronie podglądu dla personelu</div>
+      </div>
+      <p class="a">Wysyłka na serwer może się opóźnić lub nie powieść z powodu połączenia internetowego (dane pozostają wtedy zapisane lokalnie na telefonie). Sprawdź też, czy numer telefonu został wpisany poprawnie. Jeśli problem nie ustępuje, skontaktuj się z właścicielem.</p>
+    </div>
+  </div>
+
+  <div class="summary">
+    <span>Numer telefonu</span> → <span>Wybór zabiegu</span> → <span>Zdjęcia (3)</span> → <span>Analiza</span> → <span>Wyniki gromadzą się i wzmacniają argumenty przy kolejnej propozycji</span>
+  </div>
+
+  <div class="footer">Be:true SALON｜Instrukcja obsługi aplikacji do analizy skóry ver.1</div>
+
+</div>
+</body>
+</html>
